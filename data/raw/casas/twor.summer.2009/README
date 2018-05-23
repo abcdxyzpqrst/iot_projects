@@ -1,0 +1,44 @@
+WSU Smart Apartment Summer 2009 Two Resident Testbed
+
+Description
+
+This dataset represents sensor events collected in the WSU smart apartment
+testbed during the summer of 2009.  The apartment housed two residents, R1
+and R2, at this time and they performed their normal daily activities.
+
+File format
+
+Two data files are included in this release.  The file "annotated" contains
+sensor events in which the start and end of various activities are
+annotated at the end of the corresponding sensor event lines.
+
+The second "raw" file contains raw data that has not been annotated.  The number
+of days covered and number of sensor events is greater than for the annotated
+data.
+
+The third file "data" contains all of the annotated where activities are not
+segmented but are annotated with corresponding begin and end events.
+
+Sensor layouts
+
+The sensors can be categorized by:
+
+   Mxx:       motion sensor
+   Ixx:       item sensor for selected items in the kitchen
+   Dxx:       door sensor
+   AD1-A:     burner sensor
+   AD1-B:     hot water sensor
+   AD1-C:     cold water sensor
+   Txx:       temperature sensors
+   P001:      electricity usage
+
+The sensor layout of the apartment for the annotated data set is shown in the
+file sensorlayout.jpg.  The sensor layout of the apartment for the raw data set
+is shown in the file sensorlayout2.png.  The sensors are the same but some
+renumbering was done and the power usage was added.
+
+All use of the data must cite the WSU CASAS smart home project.
+
+D. Cook and M. Schmitter-Edgecombe,
+Assessing the quality of activities in a smart environment.
+Methods of Information in Medicine, 2009.
