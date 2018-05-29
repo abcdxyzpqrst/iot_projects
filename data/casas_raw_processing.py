@@ -65,7 +65,7 @@ features = {feature:i for i, features in enumerate(features)}
 data = np.empty((0, len(columns)), dtype=object)
 
 row = {col: nan for col in columns}
-
+P = []
 with open('raw/casas/twor.2009/raw', 'r') as f:
     for line in f:
         line = line.split()
@@ -77,6 +77,8 @@ with open('raw/casas/twor.2009/raw', 'r') as f:
             window_end = timestamp + window
             row = row_init(row, window_start)
         if window_end < timestamp:
+            row['P001'] = np.mean(P)
+            P = []
             data = np.append(data, np.array([[row[key] for key in columns]],
                 dtype=object), axis=0)  # record history
             while window_end < timestamp: # jumps
@@ -92,7 +94,8 @@ with open('raw/casas/twor.2009/raw', 'r') as f:
             elif line[2][0] == 'A':
                 row[line[2]] = float(line[3])
             elif line[2][0] == "P":
-                row[line[2]] = float(line[3])
+                P.append(float(line[3]))
+                #row[line[2]] = float(line[3])
             elif line[2][0] == "I":
                 row[line[2]] = 1 if line[3] == "PRESENT" else 0
             elif line[2][0] == "T":
