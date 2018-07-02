@@ -2,20 +2,19 @@ import numpy as np
 import scipy as sp
 import torch
 from torch.nn import Module
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 class BOCPD_GPTS(Module):
     def __init__(self, X, Y, gpts, hazard):
         super(BOCPD_GPTS, self).__init__()
-        self.X, self.Y = X, Y
+        self.X, self.Y = gpts.X, gpts.Y
         self.gpts = gpts
         self.hazard = hazard
 
     def changepoint_train(self):
         """
         Learning will be done for only training data
-        """
-        #self.upm_func = StudentT()
-        
+        """   
         T = self.Y.shape[0]                              # Duration
         H = self.hazard(torch.arange(1, T+1))       # Hazard values
         R = torch.zeros((T+1, T+1))
@@ -26,30 +25,32 @@ class BOCPD_GPTS(Module):
         predMed = torch.zeros((T, 1))
 
         R[0, 0] = 1
-        noise = torch.exp(self.log_noise)
+        noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             print ("Time {} is being processed...".format(t))
-            MRC = min(self.window_size, t)
+            MRC = min(self.gpts.window_size, t)
+
             if MRC == 1:
-                X = self.X[0].expand(1, self.n_features)
-                Y = self.Y[0].expand(1, self.n_features)
+                X = self.X[0].expand(1, self.gpts.n_features)
+                Y = self.Y[0].expand(1, self.gpts.n_features)
             
             else:
                 X = self.X[t-MRC : t-1]
                 Y = self.Y[t-MRC : t-1]
                 
-            K = self.kernel(X) + noise * torch.eye(X.shape[0])
+            K = self.gpts.kernel(X) + noise * torch.eye(X.shape[0])
             L = torch.potrf(K, upper=False)
                 
-            Kx = self.kernel(X, self.X[t-1].expand(1, self.n_features))
-            Kxx = self.kernel(self.X[t-1].expand(1, self.n_features))
+            Kx = self.gpts.kernel(X, self.X[t-1].expand(1, self.gpts.n_features))
+            Kxx = self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))
             A, _ = torch.gesv(Kx, L)
             V, _ = torch.gesv(Y, L)
 
             mu = torch.mm(A.t(), A)
             var = torch.mm(V.t(), V)
             
-            upm = torch.exp(StudentT(t+1, loc=mu, scale=var).log_prob(self.Y[t-1])) 
+            upm = torch.exp(MultivariateNormal(mu, var).log_prob(self.Y[t-1])) 
+            
             R[1:t+1, t] = R[:t, t-1] * upm * (1 - H[:t])
             R[0, t] = (R[:t, t-1] * upm * H[:t]).sum()
             Z[t-1] = R[:t+1, t].sum()
@@ -62,7 +63,6 @@ class BOCPD_GPTS(Module):
             loss = torch.sum(Z)
             loss.backward()
             optimizer.step()
-            print (loss)
         return
 
     def online_changepoint_detection(self, data, upm_func, hazard_func=None):

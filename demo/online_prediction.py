@@ -75,8 +75,6 @@ def main():
     gpts = GPTS(X=train_inputs, Y=train_targets, kernel=kernel, window_size=100)
     gpts.fit()
     
-    print (gpts.posterior_distribution(test_targets[0]))
-    print (gpts.X)
     # GPTS online extrapolation for later time (just for test)
     """
     pred_mean, pred_var = model.online_prediction(test_targets)
@@ -92,13 +90,13 @@ def main():
     
     # Last part
     # BOCPD-GPTS learn
+    """
     hazard = Logistic_H2()
     model = BOCPD_GPTS(X=train_inputs, Y=train_targets, gpts=gpts, hazard=hazard)
     for name, param in model.named_parameters():
         print (name, param.data)
 
     model.changepoint_train()
-    """
 
 if __name__ == '__main__':
     main()
