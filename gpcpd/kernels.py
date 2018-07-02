@@ -3,34 +3,39 @@ import torch
 from torch.nn import Module
 from torch.nn.parameter import Parameter
 
-class RQ(Module):
+class RQ_Constant(Module):
     """
-    Rational Quadratic Kernels in PyTorch
+    Rational Quadratic Kernel + Constant Kernel in PyTorch
     
-    k(x_i, x_j) = c * (1 + d(x_i, x_j)^2 / 2*\alpha*\ell^2)^(-\alpha)
+    k(x_i, x_j) = c * (1 + d(x_i, x_j)^2 / 2*\alpha*\ell^2)^(-\alpha) + 
     Args:
         log_amplitude:      logc, variance
         log_roughness:      smoothness or roughness
         log_lengthscale:    lengthscales
     NOT ARD hyperparameters (NOT per-dimension)
     """
-    def __init__(self, log_amplitude=0.0, log_roughness=0.0, log_lengthscale=0.0):
-        super(RQ, self).__init__()
-        self.register_parameter(name='log_amplitude',
+    def __init__(self, log_amplitude=0.0, log_roughness=0.0, log_lengthscale=0.0, log_noise=0.0):
+        super(RQ_Constant, self).__init__()
+        self.register_parameter(name='RQ_log_amplitude',
                                 param=Parameter(torch.Tensor([log_amplitude])))
-        self.register_parameter(name='log_roughness',
+        self.register_parameter(name='RQ_log_roughness',
                                 param=Parameter(torch.Tensor([log_roughness])))
-        self.register_parameter(name='log_lengthscale',
+        self.register_parameter(name='RQ_log_lengthscale',
                                 param=Parameter(torch.Tensor([log_lengthscale])))
+        self.register_parameter(name='Const_log_noise',
+                                param=Parameter(torch.Tensor([log_noise])))
 
     def forward(self, X1, X2=None):
-        amplitude = torch.exp(self.log_amplitude)
-        lengthscale = torch.exp(self.log_lengthscale)
-        roughness = torch.exp(self.log_roughness)
+        amplitude = torch.exp(self.RQ_log_amplitude)
+        lengthscale = torch.exp(self.RQ_log_lengthscale)
+        roughness = torch.exp(self.RQ_log_roughness)
+        noise = torch.exp(self.Const_log_noise)
 
         sdist = self.square_dist(X1, X2)
+        const = self.constant(X1, X2)
         cov = torch.ones(sdist.shape) + sdist/(2*roughness*(lengthscale**2))
         cov = amplitude * (1/cov).pow(roughness)
+        cov += noise * const
         return cov
 
     def square_dist(self, X1, X2=None):
@@ -54,6 +59,12 @@ class RQ(Module):
             sdist = -2 * torch.mm(X1, X2.t())
             sdist += X1s.view(-1, 1) + X2s.view(1, -1)
             return sdist
+    
+    def constant(self, X1, X2=None):
+        if X2 is None:
+            return torch.ones(X1.shape[0], X1.shape[0])
+        else:
+            return torch.ones(X1.shape[0], X2.shape[0])
 
 class GaussianKernel(object):
     """
