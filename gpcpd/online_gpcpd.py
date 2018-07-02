@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import scipy as sp
 import torch
@@ -19,7 +20,8 @@ class BOCPD_GPTS(Module):
         H = self.hazard(torch.arange(1, T+1))       # Hazard values
         R = torch.zeros((T+1, T+1))
         S = torch.zeros((T, T)) 
-
+    
+        loss = torch.zeros(1)
         Z = torch.zeros((T, 1))
         predMeans = torch.zeros((T, 1))
         predMed = torch.zeros((T, 1))
@@ -27,7 +29,6 @@ class BOCPD_GPTS(Module):
         R[0, 0] = 1
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
-            print ("Time {} is being processed...".format(t))
             MRC = min(self.gpts.window_size, t)
 
             if MRC == 1:
@@ -49,21 +50,31 @@ class BOCPD_GPTS(Module):
             mu = torch.mm(A.t(), A)
             var = torch.mm(V.t(), V)
             
-            upm = torch.exp(MultivariateNormal(mu, var).log_prob(self.Y[t-1])) 
-            
+            # TODO: MultivariateNormal by ourselves?
+            upm = self.multivariate_normal_pdf(self.Y[t-1], mu, var)
+            loss += torch.sum(R[:t, t-1] * upm * (1 - H[:t]))
+            loss += torch.sum(R[:t, t-1] * upm * H[:t])
             R[1:t+1, t] = R[:t, t-1] * upm * (1 - H[:t])
             R[0, t] = (R[:t, t-1] * upm * H[:t]).sum()
             Z[t-1] = R[:t+1, t].sum()
             
             R[:t+1, t] /= Z[t-1]
-
+        
+        print ("##### Changepoint training start !! #####")
+        print ("#####    optimization in progress....    ")
         optimizer = torch.optim.Adam(self.parameters(), lr=0.0005)
         for _ in range(100):
             optimizer.zero_grad()
-            loss = torch.sum(Z)
             loss.backward()
+            print (loss)
             optimizer.step()
+        print ("##### Changepoint training end !! #####")
         return
+
+    def multivariate_normal_pdf(self, x, mu, var):
+        diff = x - mu
+        log_prob = -0.5 * (torch.log(2*math.pi*var) + (diff**2)/var)
+        return torch.exp(log_prob)
 
     def online_changepoint_detection(self, data, upm_func, hazard_func=None):
         """
