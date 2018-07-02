@@ -43,7 +43,7 @@ class Logistic_H2(Module):
 
 class Log_Gamma(Module):
     def __init__(self, alpha=2.0, beta=2.0):
-        super(Gamma, self).__init__()
+        super(Log_Gamma, self).__init__()
         self.register_parameter(name='alpha',
                                 param=Parameter(torch.Tensor([alpha])))
         self.register_parameter(name='beta',
@@ -69,6 +69,8 @@ def test():
     """
     Test Scripts
     """
+    log_gamma = Log_Gamma()
+    print (log_gamma(torch.Tensor([2.0])))
     return
 
 if __name__ == '__main__':

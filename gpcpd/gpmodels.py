@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch.nn import Module
 from torch.nn.parameter import Parameter
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 class GPTS(Module):
     def __init__(self, X, Y, kernel, log_noise=0.0, window_size=50, n_features=1):
@@ -54,10 +55,36 @@ class GPTS(Module):
             loss.backward()
             optimizer.step()
         print ("##### GPTS optimization end !! #####")
+    
+    def posterior_distribution(self, test_datum):
+        noise = torch.exp(self.log_noise)
+        elapsed_time = self.X.shape[0]
+        
+        X = self.X[-self.window_size:]
+        Y = self.Y[-self.window_size:]
+        new_X = torch.Tensor([[elapsed_time]])
+        new_Y = test_datum[0].expand(1, self.n_features)
+
+        K = self.kernel(X) + noise * torch.eye(self.window_size)
+        L = torch.potrf(K, upper=False)
+
+        Kx = self.kernel(X, new_X)
+        Kxx = self.kernel(new_X)
+        A, _ = torch.gesv(Kx, L)
+        V, _ = torch.gesv(Y, L)
+
+        fmean = torch.mm(A.t(), V)
+        fvar = Kxx - torch.mm(A.t(), A)
+        
+        self.X = torch.cat((self.X, new_X), 0)
+        self.Y = torch.cat((self.Y, new_Y), 0)
+
+        return torch.exp(MultivariateNormal(fmean, fvar).log_prob(test_datum))
 
     def online_prediction(self, test_Y):
         """
         This function performs extrapolation beyond the elapsed time
+        Just for test
         """
         noise = torch.exp(self.log_noise)
         elapsed_time = self.X.shape[0]

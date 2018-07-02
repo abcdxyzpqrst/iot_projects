@@ -45,6 +45,7 @@ def main():
         hazard value
     """
     np.random.seed(777)
+    torch.manual_seed(777)
     
     data = np.genfromtxt('../data/nile.txt', delimiter=',')
     #data = data[1:, [0,120]]
@@ -74,6 +75,8 @@ def main():
     gpts = GPTS(X=train_inputs, Y=train_targets, kernel=kernel, window_size=100)
     gpts.fit()
     
+    print (gpts.posterior_distribution(test_targets[0]))
+    print (gpts.X)
     # GPTS online extrapolation for later time (just for test)
     """
     pred_mean, pred_var = model.online_prediction(test_targets)
@@ -86,7 +89,7 @@ def main():
     plt.fill_between(np.squeeze(Ttest), y1, y2, where=y1 < y2, facecolor='lightslategrey', alpha=0.7, label='2*std')
     plt.legend(loc='best')
     plt.show()
-    """
+    
     # Last part
     # BOCPD-GPTS learn
     hazard = Logistic_H2()
@@ -95,6 +98,7 @@ def main():
         print (name, param.data)
 
     model.changepoint_train()
+    """
 
 if __name__ == '__main__':
     main()
