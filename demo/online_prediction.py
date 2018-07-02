@@ -46,8 +46,11 @@ def main():
     """
     np.random.seed(777)
     
-    data = np.genfromtxt('../data/nile.txt', delimiter=',')
-    idx = [i for i, j in enumerate(data[:, 0]) if j == 715]
+    data = np.genfromtxt('../data/processed/kyoto_60.csv', delimiter=',')
+    data = data[1:, [0,120]]
+    
+    data = data[10000:11000]
+    print (data)
     n_train = 250
     Y = np.atleast_2d(data[:, 1]).T
 
@@ -66,19 +69,17 @@ def main():
     train_targets = torch.Tensor(Ytrain)
     test_targets  = torch.Tensor(Ytest)
     
-    print (Ytrain.shape)
     # GPTS model hyperparameters (pre-)training for given data
     kernel = RQ()
     model = GPTS(X=train_inputs, Y=train_targets, kernel=kernel, window_size=100)
     model.pretrain()
     
-    for name, param in model.named_parameters():
-        print (name, param.data)
+    #for name, param in model.named_parameters():
+    #    print (name, param.data)
 
     # GPTS online extrapolation for later time (just for test)
     pred_mean, pred_var = model.online_prediction(test_targets)
    
-    """
     plt.plot(np.squeeze(Ttrain), np.squeeze(Ytrain), 'r', label='Train')
     plt.plot(np.squeeze(Ttest), np.squeeze(Ytest), 'b', label='Test')
     plt.plot(np.squeeze(Ttest), pred_mean, 'black', label='Mean')
@@ -87,10 +88,9 @@ def main():
     plt.fill_between(np.squeeze(Ttest), y1, y2, where=y1 < y2, facecolor='lightslategrey', alpha=0.7, label='2*std')
     plt.legend(loc='best')
     plt.show()
-    """
 
     # BOCPD-GPTS model training & changepoint detection
-    model.changepoint_train()
+    #model.changepoint_train()
 
 if __name__ == '__main__':
     main()

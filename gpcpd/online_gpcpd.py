@@ -57,15 +57,14 @@ class BOCPD_GPTS(object):
                 amplitude = np.random.randn()
                 lengthscales = np.random.randn()
                 
+                """
                 if amplitude < 0:
                     amplitude *= -1
                 if lengthscales < 0:
                     lengthscales *= -1
                 amplitude += 1
                 lengthscales += 3
-
-                
-                
+                """
             else:
                 pass
              

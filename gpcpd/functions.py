@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import math
 import numpy as np
 import torch
@@ -112,7 +113,7 @@ class GPTS(Module):
 
     def online_prediction(self, test_Y):
         """
-        This function performs extrapolation beyond the elapsted time
+        This function performs extrapolation beyond the elapsed time
         """
         noise = torch.exp(self.log_noise)
         elapsed_time = self.X.shape[0]
