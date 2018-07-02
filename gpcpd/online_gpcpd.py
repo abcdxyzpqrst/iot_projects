@@ -3,21 +3,69 @@ import scipy as sp
 import torch
 from torch.nn import Module
 
-class torch_GPCPD(Module):
-    def __init__(self, hazard_func, upm_func):
-        super(torch_GPCPD, self).__init__()
-        self.hazard_func = hazard_func
-        self.upm_func = upm_func
+class BOCPD_GPTS(Module):
+    def __init__(self, X, Y, gpts, hazard):
+        super(BOCPD_GPTS, self).__init__()
+        self.X, self.Y = X, Y
+        self.gpts = gpts
+        self.hazard = hazard
 
-    def changepoint_detection(self, observations):
+    def changepoint_train(self):
+        """
+        Learning will be done for only training data
+        """
+        #self.upm_func = StudentT()
+        
+        T = self.Y.shape[0]                              # Duration
+        H = self.hazard(torch.arange(1, T+1))       # Hazard values
+        R = torch.zeros((T+1, T+1))
+        S = torch.zeros((T, T)) 
+
+        Z = torch.zeros((T, 1))
+        predMeans = torch.zeros((T, 1))
+        predMed = torch.zeros((T, 1))
+
+        R[0, 0] = 1
+        noise = torch.exp(self.log_noise)
+        for t in range(1, T+1):
+            print ("Time {} is being processed...".format(t))
+            MRC = min(self.window_size, t)
+            if MRC == 1:
+                X = self.X[0].expand(1, self.n_features)
+                Y = self.Y[0].expand(1, self.n_features)
+            
+            else:
+                X = self.X[t-MRC : t-1]
+                Y = self.Y[t-MRC : t-1]
+                
+            K = self.kernel(X) + noise * torch.eye(X.shape[0])
+            L = torch.potrf(K, upper=False)
+                
+            Kx = self.kernel(X, self.X[t-1].expand(1, self.n_features))
+            Kxx = self.kernel(self.X[t-1].expand(1, self.n_features))
+            A, _ = torch.gesv(Kx, L)
+            V, _ = torch.gesv(Y, L)
+
+            mu = torch.mm(A.t(), A)
+            var = torch.mm(V.t(), V)
+            
+            upm = torch.exp(StudentT(t+1, loc=mu, scale=var).log_prob(self.Y[t-1])) 
+            R[1:t+1, t] = R[:t, t-1] * upm * (1 - H[:t])
+            R[0, t] = (R[:t, t-1] * upm * H[:t]).sum()
+            Z[t-1] = R[:t+1, t].sum()
+            
+            R[:t+1, t] /= Z[t-1]
+
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0005)
+        for _ in range(100):
+            optimizer.zero_grad()
+            loss = torch.sum(Z)
+            loss.backward()
+            optimizer.step()
+            print (loss)
         return
 
-# inherit nn.Module?
-class BOCPD_GPTS(object):
-    def __init__(self, gpts_model):
-        super(BOCPD_GPTS, self).__init__()
-    
-    def changepoint_detection(self, data, upm_func, hazard_func=None):
+    def online_changepoint_detection(self, data, upm_func, hazard_func=None):
         """
         posterior:  probability matrix of p(r_t | x_{1:t})
         posterior[i,j] means p(r_t = i | x{1:j})

@@ -3,8 +3,9 @@ import numpy as np
 import sys
 import torch
 sys.path.append("../")
-from gpcpd.kernels import RQ
-from gpcpd.functions import GPTS, StudentT, Gamma
+from gpcpd.kernels import RQ_Constant
+from gpcpd.functions import Gamma, Logistic_H2
+from gpcpd.gpmodels import GPTS
 from gpcpd.online_gpcpd import BOCPD_GPTS
 from matplotlib import pyplot as plt
 from functools import partial
@@ -31,12 +32,11 @@ def stdSplit(Z, X):
     Ytest -= col_means[:, np.newaxis]
     Ytest /= col_stds[:, np.newaxis]
 
-    return (Ytrain, Ytest)
+    return Ytrain, Ytest
 
 def main():
     """
-    Random Data Changepoint Detection &
-    Industry Portfolio Demo Scripts
+    NileRiver Level Demo in the GPCPM paper
 
     Hyperparameters:
         amplitude
@@ -46,11 +46,11 @@ def main():
     """
     np.random.seed(777)
     
-    data = np.genfromtxt('../data/processed/kyoto_60.csv', delimiter=',')
-    data = data[1:, [0,120]]
+    data = np.genfromtxt('../data/nile.txt', delimiter=',')
+    #data = data[1:, [0,120]]
     
-    data = data[10000:11000]
-    print (data)
+    #data = data[10000:11000]
+    #print (data)
     n_train = 250
     Y = np.atleast_2d(data[:, 1]).T
 
@@ -58,7 +58,7 @@ def main():
     n_test  = n_total - n_train
     
     # normalized train & test data (in standard normal distribution)
-    [Ytrain, Ytest] = stdSplit(Y, n_train)
+    Ytrain, Ytest = stdSplit(Y, n_train)
     
     # training inputs (time values from 0)
     Ttrain = np.atleast_2d(range(n_train)).T
@@ -70,16 +70,14 @@ def main():
     test_targets  = torch.Tensor(Ytest)
     
     # GPTS model hyperparameters (pre-)training for given data
-    kernel = RQ()
-    model = GPTS(X=train_inputs, Y=train_targets, kernel=kernel, window_size=100)
-    model.pretrain()
+    kernel = RQ_Constant()
+    gpts = GPTS(X=train_inputs, Y=train_targets, kernel=kernel, window_size=100)
+    gpts.fit()
     
-    #for name, param in model.named_parameters():
-    #    print (name, param.data)
-
     # GPTS online extrapolation for later time (just for test)
+    """
     pred_mean, pred_var = model.online_prediction(test_targets)
-   
+    
     plt.plot(np.squeeze(Ttrain), np.squeeze(Ytrain), 'r', label='Train')
     plt.plot(np.squeeze(Ttest), np.squeeze(Ytest), 'b', label='Test')
     plt.plot(np.squeeze(Ttest), pred_mean, 'black', label='Mean')
@@ -88,9 +86,15 @@ def main():
     plt.fill_between(np.squeeze(Ttest), y1, y2, where=y1 < y2, facecolor='lightslategrey', alpha=0.7, label='2*std')
     plt.legend(loc='best')
     plt.show()
+    """
+    # Last part
+    # BOCPD-GPTS learn
+    hazard = Logistic_H2()
+    model = BOCPD_GPTS(X=train_inputs, Y=train_targets, gpts=gpts, hazard=hazard)
+    for name, param in model.named_parameters():
+        print (name, param.data)
 
-    # BOCPD-GPTS model training & changepoint detection
-    #model.changepoint_train()
+    model.changepoint_train()
 
 if __name__ == '__main__':
     main()
