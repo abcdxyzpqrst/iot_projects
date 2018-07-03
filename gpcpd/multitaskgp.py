@@ -45,7 +45,6 @@ class IndexKernel(Module):
                 index_select(1, i2.view(-1))
         return output_covar
 
-
 class ExactMultitaskGP(Module):
     def __init__(self, X, Y, kernel, rank):
         '''
