@@ -25,8 +25,11 @@ class BOCPD_GPTS(Module):
         Z = torch.zeros((T, 1))
         predMeans = torch.zeros((T, 1))
         predMed = torch.zeros((T, 1))
-
-        R[0, 0] = 1
+        
+        # we should remove all the in-place operations
+        # --> 1. try clone() method
+        #     2. ...
+        #R[0, 0] = 1
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
@@ -47,24 +50,25 @@ class BOCPD_GPTS(Module):
             A, _ = torch.gesv(Kx, L)
             V, _ = torch.gesv(Y, L)
 
-            mu = torch.mm(A.t(), A)
-            var = torch.mm(V.t(), V)
+            mu = torch.mm(A.t(), V)
+            var = Kxx - torch.mm(A.t(), A)
             
             # TODO: MultivariateNormal by ourselves?
             upm = self.multivariate_normal_pdf(self.Y[t-1], mu, var)
-            loss += torch.sum(R[:t, t-1] * upm * (1 - H[:t]))
-            loss += torch.sum(R[:t, t-1] * upm * H[:t])
+            loss += (R[:t, t-1].clone() * upm.clone() * (1 - H[:t].clone())).sum()
+            loss += (R[:t, t-1].clone() * upm.clone() * H[:t].clone()).sum()
             R[1:t+1, t] = R[:t, t-1] * upm * (1 - H[:t])
-            R[0, t] = (R[:t, t-1] * upm * H[:t]).sum()
+            R[0, t] = (R[:t, t-1]* upm * H[:t]).sum()
             Z[t-1] = R[:t+1, t].sum()
             
             R[:t+1, t] /= Z[t-1]
         
         print ("##### Changepoint training start !! #####")
         print ("#####    optimization in progress....    ")
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0005)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         for _ in range(100):
-            optimizer.zero_grad()
+            optimizer.zero_grad() 
+            #loss = torch.sum(Z)
             loss.backward()
             print (loss)
             optimizer.step()
@@ -72,9 +76,10 @@ class BOCPD_GPTS(Module):
         return
 
     def multivariate_normal_pdf(self, x, mu, var):
-        diff = x - mu
-        log_prob = -0.5 * (torch.log(2*math.pi*var) + (diff**2)/var)
-        return torch.exp(log_prob)
+        """
+        This handles only 1-dimensional case
+        """
+        return torch.exp(-0.5 * (torch.log(2*math.pi*var) + ((x - mu)**2)/var))
 
     def online_changepoint_detection(self, data, upm_func, hazard_func=None):
         """
