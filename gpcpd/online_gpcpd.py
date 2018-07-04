@@ -12,24 +12,22 @@ class BOCPD_GPTS(Module):
         self.gpts = gpts
         self.hazard = hazard
 
-    def changepoint_train(self):
+    def getLikelihood(self):
         """
         Learning will be done for only training data
         """   
         T = self.Y.shape[0]                              # Duration
         H = self.hazard(torch.arange(1, T+1))       # Hazard values
-        R = torch.zeros((T+1, T+1))
+        R = torch.zeros((T+1, 1))
         S = torch.zeros((T, T)) 
     
-        loss = torch.zeros(1)
+        nlml = torch.zeros(1)
         Z = torch.zeros((T, 1))
-        predMeans = torch.zeros((T, 1))
-        predMed = torch.zeros((T, 1))
         
         # we should remove all the in-place operations
         # --> 1. try clone() method
         #     2. ...
-        #R[0, 0] = 1
+        R[0, 0] = R[0, 0] + 1
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
@@ -53,22 +51,23 @@ class BOCPD_GPTS(Module):
             mu = torch.mm(A.t(), V)
             var = Kxx - torch.mm(A.t(), A)
             
-            # TODO: MultivariateNormal by ourselves?
+            # TODO: concatenate tensors
             upm = self.multivariate_normal_pdf(self.Y[t-1], mu, var)
-            loss += (R[:t, t-1].clone() * upm.clone() * (1 - H[:t].clone())).sum()
-            loss += (R[:t, t-1].clone() * upm.clone() * H[:t].clone()).sum()
-            R[1:t+1, t] = R[:t, t-1] * upm * (1 - H[:t])
-            R[0, t] = (R[:t, t-1]* upm * H[:t]).sum()
-            Z[t-1] = R[:t+1, t].sum()
-            
-            R[:t+1, t] /= Z[t-1]
+            tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=1, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t])).t()), 0)
+            nlml += tmp.sum()
+            tmp /= tmp.sum()
+            tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
+            R = torch.cat((R, tmp), 1)
         
+        return nlml
+     
+    def changepoint_train(self):
         print ("##### Changepoint training start !! #####")
         print ("#####    optimization in progress....    ")
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        for _ in range(100):
-            optimizer.zero_grad() 
-            #loss = torch.sum(Z)
+        for _ in range(500):
+            optimizer.zero_grad()
+            loss = self.getLikelihood()
             loss.backward()
             print (loss)
             optimizer.step()
@@ -81,13 +80,13 @@ class BOCPD_GPTS(Module):
         """
         return torch.exp(-0.5 * (torch.log(2*math.pi*var) + ((x - mu)**2)/var))
 
-    def online_changepoint_detection(self, data, upm_func, hazard_func=None):
+    def online_changepoint_detection(self, Y, K):
         """
         posterior:  probability matrix of p(r_t | x_{1:t})
         posterior[i,j] means p(r_t = i | x{1:j})
 
-        maxes:          MAP estimate of posterior matrix
-        hazard_func:    first, we fix this by constant 
+        Y:  whole data (train + test)
+        K:  window size (how much we look back?) 
         """
         N = data.shape[0]                               # number of observations
         maxes = np.zeros(N+1)
@@ -97,39 +96,10 @@ class BOCPD_GPTS(Module):
         
         lcp = 0
         # here, t starts with value 0, but we refer to this as a left-shifted seq by 1.
-        for t, y in enumerate(data):
-            t += 1                                      # for convenience (indexing from 1) 
-            upm = upm_func.pdf(np.squeeze(y), t)        # p(x_t | r_(t-1), x_t^(r))
-            hazard = hazard_func(np.array(range(t)))    # p(r_t | r_(t-1))
-            
-            # next two lines represent message passing from previous step
-            # Update the messages, there is a new change point
-            posterior[0, t] = np.sum(posterior[0:t, t-1] * upm * hazard)
+        for t in range(1, T+1):
+            MRC = min(self.gpts.window_size, t)
 
-            # for the case, r_t = r_(t-1) + 1
-            posterior[1:t+1, t] = posterior[0:t, t-1] * upm * (1 - hazard)
-            
-            # Renormalizing (to make probability density)
-            posterior[:, t] = posterior[:, t] / np.sum(posterior[:, t])
-            
-            # MAP estimate
-            map_estimate = posterior[:, t].argmax()
-            maxes[t] = map_estimate
+            if MRC == 1:
+                X = torch.Tensor([[0]])
 
-            if map_estimate == 0:
-                print ("Changepoint occurs at {}".format(t))
-                amplitude = np.random.randn()
-                lengthscales = np.random.randn()
-                
-                """
-                if amplitude < 0:
-                    amplitude *= -1
-                if lengthscales < 0:
-                    lengthscales *= -1
-                amplitude += 1
-                lengthscales += 3
-                """
-            else:
-                pass
-             
         return posterior, maxes

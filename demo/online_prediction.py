@@ -60,7 +60,8 @@ def main():
     
     # normalized train & test data (in standard normal distribution)
     Ytrain, Ytest = stdSplit(Y, n_train)
-    
+    Y = np.concatenate((Ytrain, Ytest))
+
     # training inputs (time values from 0)
     Ttrain = np.atleast_2d(range(n_train)).T
     Ttest  = np.atleast_2d(range(n_train, n_total)).T
@@ -97,6 +98,9 @@ def main():
         print (name, param.data)
 
     model.changepoint_train()
+    
+    for name, param in model.named_parameters():
+        print (name, param.data)
 
 if __name__ == '__main__':
     main()
