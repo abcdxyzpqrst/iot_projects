@@ -101,10 +101,12 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None)
     f_vars = [torch.mm(A.t(), A)] # (l x l) tensor
     for t in range(1, T):
         B_, L_S = cholesky.update(K[t*l:(t+1)*l, :t*l], K[t*l:(t+1)*l, t*l:(t+1)*l])
-        A = torch.gesv(K_star[t*l:(t+1)*l] - B_.mm(A), L_S)[0]
-        V = torch.gesv(Y_prev_rev[t:t+1].t() - B_.mm(V), L_S)[0]
-        f_means.append(f_means[-1] + torch.mm(A.t(), V).squeeze(1))
-        f_vars.append(f_vars[-1] + torch.mm(A.t(), A))
+        A2 = torch.gesv(K_star[t*l:(t+1)*l] - B_.mm(A), L_S)[0]
+        V2 = torch.gesv(Y_prev_rev[t:t+1].t() - B_.mm(V), L_S)[0]
+        f_means.append(f_means[-1] + torch.mm(A2.t(), V2).squeeze(1))
+        f_vars.append(f_vars[-1] + torch.mm(A2.t(), A2))
+        A = torch.cat((A, A2), dim=0)
+        V = torch.cat((V, V2), dim=0)
 
     # order r_t== 1 ~ r_t == t
     return torch.stack(f_means, dim=0), torch.stack(f_vars, dim=0)
