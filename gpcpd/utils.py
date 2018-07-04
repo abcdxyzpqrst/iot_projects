@@ -55,7 +55,7 @@ def flip(x, dim):
     return x[inds]
 
 
-def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
+def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None):
     '''
     iteratively calculate f_mean and f_var
 
@@ -64,7 +64,7 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
     Let
     [L_A    0 ] [x1] = [y1]
     [B_    L_S] [x2]   [y2],
-    --> x2 = torch.gesv(y2 - B_*x1, L_S)
+    => x2 = torch.gesv(y2 - B_*x1, L_S)
     f_mean and f_var are updated additively
 
     '''
@@ -74,6 +74,7 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
     l = Y_prev.shape[1]
     assert T == Y_prev.shape[0]
     # reverse order
+    eye = torch.ones(T).diag()
     reverse_ind = torch.arange(T-1, -1, -1).long()
     X_prev_rev = X_prev[reverse_ind]
     Y_prev_rev = Y_prev[reverse_ind]
@@ -84,10 +85,13 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
 
     if l > 1:
         assert task_kernel is not None
-        # TODO multitask case
-        K = kron_prod(task_kernel, K)
+        noise = kron_prod(log_noise.exp().diag(), eye)
+        K = kron_prod(task_kernel, K) + noise
         K_ss = kron_prod(task_kernel, K_ss)
         K_star = kron_prod(task_kernel, K_star)
+    else:
+        noise = log_noise.exp() * eye
+        K += noise
 
     cholesky = IncrementalCholesky(K[:l, :l]) # most recent
     L = cholesky.L_A
@@ -95,7 +99,6 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
 
     f_means = [torch.mm(A.t(), V)]
     f_vars = [torch.mm(A.t(), A)]
-    # TODO add noise matrix
     for t in range(1, T):
         B_, L_S = cholesky.update(K[t*l:(t+1)*l, :t*l], K[t*l:(t+1)*l, t*l:(t+1)*l])
         A = torch.gesv(K_star[t*l:(t+1)*l] - B_.mm(A), L_S)[0]
