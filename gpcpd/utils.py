@@ -42,7 +42,7 @@ class IncrementalCholesky(Module):
             torch.cat((self.L_A, torch.zeros(n, m)), dim=1),
             torch.cat((B_, L_S), dim=1)), dim=0)
         self.A = torch.cat((
-            torch.cat((A, B.t()), dim=1),
+            torch.cat((self.A, B.t()), dim=1),
             torch.cat((B, D), dim=1)), dim=0)
 
         return B_, L_S
@@ -97,8 +97,8 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None)
     L = cholesky.L_A
     A, V = torch.gesv(K_star[:l], L)[0], torch.gesv(Y_prev_rev[:1].t(), L)[0]
 
-    f_means = [torch.mm(A.t(), V)]
-    f_vars = [torch.mm(A.t(), A)]
+    f_means = [torch.mm(A.t(), V)] # (1 x l) tensor
+    f_vars = [torch.mm(A.t(), A)] # (l x l) tensor
     for t in range(1, T):
         B_, L_S = cholesky.update(K[t*l:(t+1)*l, :t*l], K[t*l:(t+1)*l, t*l:(t+1)*l])
         A = torch.gesv(K_star[t*l:(t+1)*l] - B_.mm(A), L_S)[0]
@@ -107,7 +107,7 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None)
         f_vars.append(f_vars[-1] + torch.mm(A.t(), A))
 
     # order r_t== 1 ~ r_t == t
-    return f_means, f_vars
+    return torch.f_means, f_vars
 
 
 if __name__ == '__main__':
