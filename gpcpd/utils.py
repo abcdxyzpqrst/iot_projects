@@ -95,7 +95,7 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, task_kernel=None):
 
     f_means = [torch.mm(A.t(), V)]
     f_vars = [torch.mm(A.t(), A)]
-
+    # TODO add noise matrix
     for t in range(1, T):
         B_, L_S = cholesky.update(K[t*l:(t+1)*l, :t*l], K[t*l:(t+1)*l, t*l:(t+1)*l])
         A = torch.gesv(K_star[t*l:(t+1)*l] - B_.mm(A), L_S)[0]
