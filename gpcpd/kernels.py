@@ -3,6 +3,40 @@ import torch
 from torch.nn import Module
 from torch.nn.parameter import Parameter
 
+class RBF(Module):
+    """
+    RBF kernel with ARD hyperparameters (Automatic Relevance Determination)
+    """
+    def __init__(self, log_amplitude=0.0, log_lengthscales=[0.0], n_dims=1, eps=1e-5):
+        super(RBF, self).__init__()
+        self.n_dims = n_dims
+        self.eps = eps
+        self.register_parameter(name="log_amplitude",
+                                param=Parameter(torch.zeros(1)))
+        self.register_parameter(name="log_lengthscales",
+                                param=Parameter(torch.zeros(self.n_dims)))
+    
+    def forward(self, X1, X2=None):
+        amplitude = torch.exp(self.log_amplitude)
+        lengthscales = torch.exp(self.log_lengthscales) + self.eps
+
+        X1 = X1 / lengthscales
+        X1s = torch.sum(X1**2, dim=1)
+
+        if X2 is None:
+            dist = -2 * torch.mm(X1, X1.t())
+            dist += X1s.view(-1, 1) + X1s.view(1, -1)
+            cov = amplitude * torch.exp(-dist / 2)
+            return cov
+        
+        else:
+            X2 = X2 / lengthscales
+            X2s = torch.sum(X2**2, dim=1)
+            dist = -2 * torch.mm(X1, X2.t())
+            dist += X1s.view(-1, 1) + X2s.view(1, -1)
+            cov = amplitude * torch.exp(-dist / 2)
+            return cov
+
 class RQ_Constant(Module):
     """
     Rational Quadratic Kernel + Constant Kernel in PyTorch
