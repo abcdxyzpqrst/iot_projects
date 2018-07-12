@@ -38,7 +38,6 @@ class Logistic_H2(Module):
         h = self.logistic(self.logit_h)
         a = self.slope
         b = self.intercept
-        
         return h * self.logistic(a*x + b)
 
 class Log_Gamma(Module):
