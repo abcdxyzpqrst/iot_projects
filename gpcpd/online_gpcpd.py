@@ -16,15 +16,15 @@ class BOCPD_GPTS(Module):
     def getLikelihood(self):
         """
         Learning will be done for only training data
-        """   
+        """
         T = self.Y.shape[0]                              # Duration
-        H = self.hazard(torch.arange(1, T+1))       # Hazard values
-        R = torch.zeros((T+1, 1))
-        S = torch.zeros((T, T)) 
-    
-        nlml = torch.zeros(1)
-        Z = torch.zeros((T, 1))
-        
+        H = self.hazard(torch.arange(1, T+1, out=self.Y.new()))       # Hazard values
+        R = torch.zeros((T+1, 1), out=self.Y.new())
+        S = torch.zeros((T, T), out=self.Y.new())
+
+        nlml = torch.zeros(1, out=self.Y.new())
+        Z = torch.zeros((T, 1), out=self.Y.new())
+
         # we should remove all the in-place operations
         # --> 1. try clone() method
         #     2. ...
@@ -32,35 +32,34 @@ class BOCPD_GPTS(Module):
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
-            
             # no previous data --> GP prior
             if MRC == 1:
-                upm = self.multivariate_normal_pdf(self.Y[0], torch.zeros(1), self.gpts.kernel(self.X[0].expand(1, self.gpts.n_features)))      # first datum
+                upm = self.multivariate_normal_pdf(self.Y[0], torch.zeros(1,
+                    out=self.Y.new()), self.gpts.kernel(self.X[0].expand(1, self.gpts.n_features)))      # first datum
                 tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=1, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t])).t()), 0)
                 nlml += tmp.sum()
                 tmp /= tmp.sum()
-                tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
+                tmp = torch.cat((tmp, torch.zeros((T-t, 1), out=tmp.new())), 0)
                 R = torch.cat((R, tmp), 1)
-
             else:
                 X = self.X[t-MRC : t-1]
                 Y = self.Y[t-MRC : t-1]
-            
                 # compute upm's for r_t-1 = 1 ~ t-1
                 fmean, fvar = calc_f_mean_var(X, Y, self.X[t-1].expand(1, self.gpts.n_features), self.gpts.kernel, self.gpts.log_noise)
                 d = MultivariateNormal(fmean, fvar)
 
                 # r_t-1 = 0, r_t-1 = 1 ~ t-1
-                upm = self.multivariate_normal_pdf(self.Y[t-1], torch.zeros(1), self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))).squeeze(dim=1)
+                upm = self.multivariate_normal_pdf(self.Y[t-1], torch.zeros(1,
+                    out=self.Y.new()), self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))).squeeze(dim=1)
                 upm = torch.cat((upm, torch.exp(d.log_prob(self.Y[t-1]))), 0)
-                
+
                 tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=0, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t]))), 0).view(-1, 1)
                 nlml += tmp.sum()
                 tmp /= tmp.sum()
-                tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
+                tmp = torch.cat((tmp, torch.zeros((T-t, 1), out=tmp.new())), 0)
                 R = torch.cat((R, tmp), 1)
         return nlml
-     
+
     def changepoint_train(self):
         print ("##### Changepoint training start !! #####")
         print ("#####    optimization in progress....    ")
@@ -86,20 +85,20 @@ class BOCPD_GPTS(Module):
         posterior[i,j] means p(r_t = i | x{1:j})
 
         Y:  whole data (train + test)
-        K:  window size (how much we look back?) 
+        K:  window size (how much we look back?)
         """
         N = data.shape[0]                               # number of observations
         maxes = np.zeros(N+1)
-        posterior = np.zeros(shape=(N+1, N+1),          # (N+1) x (N+1) matrix 
+        posterior = np.zeros(shape=(N+1, N+1),          # (N+1) x (N+1) matrix
                              dtype=np.float64)
         posterior[0, 0] = 1                             # p(r_0 = 0) = 1 (for simplicity)
-        
+
         lcp = 0
         # here, t starts with value 0, but we refer to this as a left-shifted seq by 1.
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
 
             if MRC == 1:
-                X = torch.Tensor([[0]])
+                X = torch.zeros((1, 1), out=Y.new())#Tensor([[0]])
 
         return posterior, maxes

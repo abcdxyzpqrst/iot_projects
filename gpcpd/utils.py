@@ -7,6 +7,7 @@ except:
 
 class IncrementalCholesky(Module):
     def __init__(self, A):
+        super(IncrementalCholesky, self).__init__()
         self.A = A
         self.L_A = torch.potrf(A, upper=False)
         #self.inv_L_A = self.L_A.inverse()
@@ -39,7 +40,7 @@ class IncrementalCholesky(Module):
             L_S = torch.sqrt(S)
 
         self.L_A = torch.cat((
-            torch.cat((self.L_A, torch.zeros(n, m)), dim=1),
+            torch.cat((self.L_A, torch.zeros((n, m), out=self.L_A.new())), dim=1),
             torch.cat((B_, L_S), dim=1)), dim=0)
         self.A = torch.cat((
             torch.cat((self.A, B.t()), dim=1),
@@ -74,8 +75,8 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None)
     l = Y_prev.shape[1]
     assert T == Y_prev.shape[0]
     # reverse order
-    eye = torch.ones(T).diag()
-    reverse_ind = torch.arange(T-1, -1, -1).long()
+    eye = torch.ones(T, out=X_prev.new()).diag()
+    reverse_ind = torch.arange(T-1, -1, -1, out=X_prev.new()).long()
     X_prev_rev = X_prev[reverse_ind]
     Y_prev_rev = Y_prev[reverse_ind]
 
@@ -93,7 +94,7 @@ def calc_f_mean_var(X_prev, Y_prev, X_curr, kernel, log_noise, task_kernel=None)
         noise = log_noise.exp() * eye
         K += noise
 
-    cholesky = IncrementalCholesky(K[:l, :l]) # most recent
+    cholesky = IncrementalCholesky(K[:l, :l]).to(K.device) # most recent
     L = cholesky.L_A
     A, V = torch.gesv(K_star[:l], L)[0], torch.gesv(Y_prev_rev[:1].t(), L)[0]
 
