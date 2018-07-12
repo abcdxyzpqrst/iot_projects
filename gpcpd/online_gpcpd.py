@@ -4,6 +4,7 @@ import scipy as sp
 import torch
 from torch.nn import Module
 from torch.distributions.multivariate_normal import MultivariateNormal
+from utils import calc_f_mean_var
 
 class BOCPD_GPTS(Module):
     def __init__(self, X, Y, gpts, hazard):
@@ -31,41 +32,40 @@ class BOCPD_GPTS(Module):
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
-
-            if MRC == 1:
-                X = self.X[0].expand(1, self.gpts.n_features)
-                Y = self.Y[0].expand(1, self.gpts.n_features)
             
+            # no previous data --> GP prior
+            if MRC == 1:
+                upm = self.multivariate_normal_pdf(self.Y[0], torch.zeros(1), self.gpts.kernel(self.X[0].expand(1, self.gpts.n_features)))      # first datum
+                tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=1, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t])).t()), 0)
+                nlml += tmp.sum()
+                tmp /= tmp.sum()
+                tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
+                R = torch.cat((R, tmp), 1)
+
             else:
                 X = self.X[t-MRC : t-1]
                 Y = self.Y[t-MRC : t-1]
-                
-            K = self.gpts.kernel(X) + noise * torch.eye(X.shape[0])
-            L = torch.potrf(K, upper=False)
-                
-            Kx = self.gpts.kernel(X, self.X[t-1].expand(1, self.gpts.n_features))
-            Kxx = self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))
-            A, _ = torch.gesv(Kx, L)
-            V, _ = torch.gesv(Y, L)
-
-            mu = torch.mm(A.t(), V)
-            var = Kxx - torch.mm(A.t(), A)
             
-            # TODO: concatenate tensors
-            upm = self.multivariate_normal_pdf(self.Y[t-1], mu, var)
-            tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=1, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t])).t()), 0)
-            nlml += tmp.sum()
-            tmp /= tmp.sum()
-            tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
-            R = torch.cat((R, tmp), 1)
-        
+                # compute upm's for r_t-1 = 1 ~ t-1
+                fmean, fvar = calc_f_mean_var(X, Y, self.X[t-1].expand(1, self.gpts.n_features), self.gpts.kernel, self.gpts.log_noise)
+                d = MultivariateNormal(fmean, fvar)
+
+                # r_t-1 = 0, r_t-1 = 1 ~ t-1
+                upm = self.multivariate_normal_pdf(self.Y[t-1], torch.zeros(1), self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))).squeeze(dim=1)
+                upm = torch.cat((upm, torch.exp(d.log_prob(self.Y[t-1]))), 0)
+                
+                tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=0, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t]))), 0).view(-1, 1)
+                nlml += tmp.sum()
+                tmp /= tmp.sum()
+                tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
+                R = torch.cat((R, tmp), 1)
         return nlml
      
     def changepoint_train(self):
         print ("##### Changepoint training start !! #####")
         print ("#####    optimization in progress....    ")
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        for _ in range(500):
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.1)
+        for _ in range(200):
             optimizer.zero_grad()
             loss = self.getLikelihood()
             loss.backward()

@@ -21,7 +21,7 @@ class Logistic_H2(Module):
     Hyperparameters: [logit(h), a, b]
     -> used as a hazard function
     """
-    def __init__(self, h=1.0, a=1.0, b=1.0):
+    def __init__(self, h=-3.892, a=1.0, b=1.0):
         super(Logistic_H2, self).__init__()
         self.register_parameter(name='logit_h',
                                 param=Parameter(torch.Tensor([h])))

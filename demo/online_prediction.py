@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import torch
 sys.path.append("../")
+sys.path.append("../gpcpd")
 from gpcpd.kernels import RQ_Constant
 from gpcpd.functions import Gamma, Logistic_H2
 from gpcpd.gpmodels import GPTS
