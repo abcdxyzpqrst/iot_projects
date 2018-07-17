@@ -13,7 +13,13 @@ class Constant(Module):
     """
     TODO:   implement the constant hazard function
     """
-    pass
+    def __init__(self, h=0.02):
+        super(Constant, self).__init__()
+        self.register_parameter(name='h',
+                                param=Parameter(torch.Tensor([h])))
+
+    def forward(self, x):
+        return self.h
 
 class Logistic_H2(Module):
     """
@@ -38,6 +44,7 @@ class Logistic_H2(Module):
         h = self.logistic(self.logit_h)
         a = self.slope
         b = self.intercept
+        
         return h * self.logistic(a*x + b)
 
 class Log_Gamma(Module):

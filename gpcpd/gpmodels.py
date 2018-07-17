@@ -16,7 +16,7 @@ class GPTS(Module):
             Y:           training targets (observations)
             kernel:      kernel
             log_noise:   noise level in log scale
-            window_size: how many data will be used?
+            window_size: how many data will be used? 
         Assume that the timestep(:=dt) is 1
         elapsed time will be used in online_prediction
         TODO:   covariance matrix precomputation
@@ -27,7 +27,7 @@ class GPTS(Module):
         self.n_features = n_features                # in the paper, denoted as \tau
         self.register_parameter(name='log_noise',
                                 param=Parameter(torch.zeros(1)))
-
+    
     def fit(self):
         """
         Learning hyperparameters (kernel, noise level)
@@ -37,18 +37,17 @@ class GPTS(Module):
         """
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         max_epoch = 1000
-
+        
         # Another convergence criteria is needed.
         print ("##### GPTS optimization start !! #####")
         print ("     optimization in progress....     ")
         for epoch in range(max_epoch):
             optimizer.zero_grad()
             noise = torch.exp(self.log_noise)
-            K = self.kernel(self.X) + torch.eye(self.X.shape[0],
-                    out=self.X.new()) * noise
+            K = self.kernel(self.X) + torch.eye(self.X.shape[0]) * noise
             L = torch.potrf(K, upper=False)
             alpha, _ = torch.gesv(self.Y, L)
-
+            
             # negative log likelihood
             loss = 0.5 * torch.sum(alpha**2)         # data fitting term
             loss += torch.sum(torch.log(torch.diagonal(L, offset=0)))   # log determinant
@@ -56,14 +55,13 @@ class GPTS(Module):
             loss.backward()
             optimizer.step()
         print ("##### GPTS optimization end !! #####")
-
-    def posterior_distribution(self, test_datum, window_size=None):
+    
+    def posterior_distribution(self, test_datum):
         noise = torch.exp(self.log_noise)
         elapsed_time = self.X.shape[0]
-        if window_size is None:
-            window_size = self.window_size
-        X = self.X[-window_size:]
-        Y = self.Y[-window_size:]
+        
+        X = self.X[-self.window_size:]
+        Y = self.Y[-self.window_size:]
         new_X = torch.Tensor([[elapsed_time]])
         new_Y = test_datum[0].expand(1, self.n_features)
 
@@ -77,13 +75,13 @@ class GPTS(Module):
 
         fmean = torch.mm(A.t(), V)
         fvar = Kxx - torch.mm(A.t(), A)
-
+        
         self.X = torch.cat((self.X, new_X), 0)
         self.Y = torch.cat((self.Y, new_Y), 0)
 
         return torch.exp(MultivariateNormal(fmean, fvar).log_prob(test_datum))
 
-    def online_prediction(self, test_Y, window_size=None):
+    def online_prediction(self, test_Y):
         """
         This function performs extrapolation beyond the elapsed time
         Just for test
@@ -91,19 +89,16 @@ class GPTS(Module):
         noise = torch.exp(self.log_noise)
         elapsed_time = self.X.shape[0]
         T = test_Y.shape[0]
-
-        if window_size is None:
-            window_size = self.window_size
-
+        
         mu = []
         var = []
         for t in range(T):
-            X = self.X[-window_size:]      # Last time interval
-            Y = self.Y[-window_size:]      # Last observations
+            X = self.X[-self.window_size:]      # Last time interval
+            Y = self.Y[-self.window_size:]      # Last observations
             new_X = torch.Tensor([[elapsed_time + t]])
             new_Y = test_Y[t].expand(1, self.n_features)
 
-            K = self.kernel(X) + noise * torch.eye(window_size)
+            K = self.kernel(X) + noise * torch.eye(self.window_size)
             L = torch.potrf(K, upper=False)
 
             Kx = self.kernel(X, new_X)
@@ -116,13 +111,12 @@ class GPTS(Module):
 
             fmean = np.asscalar(fmean.detach().numpy())
             fvar = np.asscalar(fvar.detach().numpy())
-
+            
             mu.append(fmean)
             var.append(fvar)
             self.X = torch.cat((self.X, new_X), 0)
             self.Y = torch.cat((self.Y, new_Y), 0)
-
-        # reset X, Y
+        
         self.X = self.X[:elapsed_time]
         self.Y = self.Y[:elapsed_time]
         return mu, var
@@ -162,7 +156,7 @@ class ARGP(object):
             self.holding_data[0] = np.copy(last_observation)
             self.curr_n_obs += 1
             return multivariate_normal.pdf(last_observation, mean=fmean, cov=fvar)
-
+        
         else:
             train_data = self.holding_data[0:self.curr_n_obs]               # shape = (p, d)
             assert train_data.shape == (self.curr_n_obs, self.n_features)
@@ -172,23 +166,23 @@ class ARGP(object):
             K = self.kernel(train_data) + noise*np.eye(self.curr_n_obs)
             L = np.linalg.cholesky(K)                                       # K = L * L^T
             kx = self.kernel(train_data, last_observation)                  # kx = k(X, x*)
-
+            
             A = scipy.linalg.solve_triangular(L, kx, lower=True)            # A = L^-1 * kx
             V = scipy.linalg.solve_triangular(L, train_data, lower=True)    # V = L^-1 * X
-
+         
             fmean = np.squeeze(np.matmul(np.transpose(A), V))               # \mu = kx^T * (K + \sigma*I)^-1 * X
             fvar = self.kernel(last_observation) - np.matmul(np.transpose(A), A)
             fvar = np.eye(self.n_features) * np.asscalar(fvar)              # same variance value for each feature
-
+            
             # we should remove oldest data (at index 0)
             if self.curr_n_obs == self.capacity:
                 self.holding_data[0:-1] = np.copy(self.holding_data[1:])    # shift upwards by one
             else:
                 self.curr_n_obs += 1
             self.holding_data[-1] = np.copy(last_observation)
-
+          
             return multivariate_normal.pdf(last_observation, mean=fmean, cov=fvar)
-
+    
     def reset_data(self):
         """
         When changepoint occurs, the data before the last changepoint should be discarded
@@ -205,7 +199,7 @@ class ARGP(object):
             x:      observation (shape=(n_dims,))
             mean:   mean vector (shape=(n_dims,))
             cov:    covariance matrix (shape=(n_dims, n_dims))
-
+        
             cov should be PSD matrix, so we can use Cholesky decomposition
         """
         n_dims = cov.shape[0]

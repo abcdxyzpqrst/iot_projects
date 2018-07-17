@@ -15,7 +15,7 @@ class RBF(Module):
                                 param=Parameter(torch.zeros(1)))
         self.register_parameter(name="log_lengthscales",
                                 param=Parameter(torch.zeros(self.n_dims)))
-
+    
     def forward(self, X1, X2=None):
         amplitude = torch.exp(self.log_amplitude)
         lengthscales = torch.exp(self.log_lengthscales) + self.eps
@@ -28,7 +28,7 @@ class RBF(Module):
             dist += X1s.view(-1, 1) + X1s.view(1, -1)
             cov = amplitude * torch.exp(-dist / 2)
             return cov
-
+        
         else:
             X2 = X2 / lengthscales
             X2s = torch.sum(X2**2, dim=1)
@@ -40,8 +40,8 @@ class RBF(Module):
 class RQ_Constant(Module):
     """
     Rational Quadratic Kernel + Constant Kernel in PyTorch
-
-    k(x_i, x_j) = c * (1 + d(x_i, x_j)^2 / 2*\alpha*\ell^2)^(-\alpha) +
+    
+    k(x_i, x_j) = c * (1 + d(x_i, x_j)^2 / 2*\alpha*\ell^2)^(-\alpha) + 
     Args:
         log_amplitude:      logc, variance
         log_roughness:      smoothness or roughness
@@ -67,7 +67,7 @@ class RQ_Constant(Module):
 
         sdist = self.square_dist(X1, X2)
         const = self.constant(X1, X2)
-        cov = torch.ones_like(sdist) + sdist/(2*roughness*(lengthscale**2))
+        cov = torch.ones(sdist.shape) + sdist/(2*roughness*(lengthscale**2))
         cov = amplitude * (1/cov).pow(roughness)
         cov += noise * const
         return cov
@@ -82,7 +82,7 @@ class RQ_Constant(Module):
             N * M square dist matrix
         """
         X1s = torch.sum(X1**2, dim=1)
-
+        
         if X2 is None:
             sdist = -2 * torch.mm(X1, X1.t())
             sdist += X1s.view(-1, 1) + X1s.view(1, -1)
@@ -93,12 +93,12 @@ class RQ_Constant(Module):
             sdist = -2 * torch.mm(X1, X2.t())
             sdist += X1s.view(-1, 1) + X2s.view(1, -1)
             return sdist
-
+    
     def constant(self, X1, X2=None):
         if X2 is None:
-            return torch.ones(X1.shape[0], X1.shape[0], out=X1.new())
+            return torch.ones(X1.shape[0], X1.shape[0])
         else:
-            return torch.ones(X1.shape[0], X2.shape[0], out=X1.new())
+            return torch.ones(X1.shape[0], X2.shape[0])
 
 class GaussianKernel(object):
     """
@@ -110,7 +110,7 @@ class GaussianKernel(object):
         self.eps = eps      # for numerical stability
         self.amplitude = amplitude
         self.lengthscales = [self.eps + lengthscales for _ in range(self.n_dims)]
-
+    
     def __call__(self, X1, X2=None):
         """
         Args:
@@ -119,7 +119,7 @@ class GaussianKernel(object):
         Returns:
             k(X1, X2):  N x M kernel matrix
         """
-
+        
         if X1.ndim == 1:
             X1 = np.expand_dims(X1, axis=0)
         else:
