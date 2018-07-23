@@ -24,8 +24,8 @@ if __name__ == "__main__":
     data = pandas.read_csv('iot_projects/data/processed/kyoto_60.csv')
     cols = data.columns
     
-    flag = 1
-    cnt = 0
+    flag = 1                    # flag == 1,2 means irrelevant column names (not sensor names)
+    cnt = 0                     # cnt == k means that you draw 'k' sensor plots in one screen
     fig = plt.figure()
     for name in cols:
         if flag == 1:
