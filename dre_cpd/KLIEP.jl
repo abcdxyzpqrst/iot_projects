@@ -1,13 +1,21 @@
 ##### KL-divergence Density-Ratio Estimation #####
-using Roots
+using Roots, PyPlot
 
 """
 Change-Point Detection in Time-Series Data by Direct Density-Ratio Estimation
-Implementation
+
+Done:   Algorithm 1,2
+
+KLIEP algorithm --> Algorithm 1
+Kernel Lengthscale Selection by CV --> Algorithm 2 (TODO: by hyperparameter learning?)
+
+Online Version --> Algorithm 3,4
 """
 
 function Gaussian_pdf(x, μ, Σ)
-
+    D, N = size(x)
+    prob = 0.0
+    return prob
 end
 
 function RBF(X1, X2; ℓ=1.0)
@@ -16,14 +24,14 @@ function RBF(X1, X2; ℓ=1.0)
     X1, X2 ==> design matrices
     ℓ:  lengthscale
     """
-    N, D = size(X1)
-    M, D = size(X2)
+    D, N = size(X1)
+    D, M = size(X2)
     
     X1s = sum(X1.^2, 1)
     X2s = sum(X2.^2, 1)
 
-    dist = repmat(X2s', N, 1) + repmat(X1s, 1, M) - 2*X1*X2'
-    K = exp(-dist / (2*ℓ^2))
+    sdist = repmat(X2s, N, 1) + repmat(X1s', 1, M) - 2*X1'*X2
+    K = exp.(-sdist / (2*ℓ^2))
     return K
 end
 
@@ -31,11 +39,11 @@ function KLIEP_projection(α, Xte, b, c)
     """
     Perform feasibility satisfaction
     """
-    α = α + b*(1-sum(b.*α))*pinv(c, 10^(-20))       # α <- α + (1 - bᵀα)b / c, c := bᵀb
-    α = max(0, α)                                   # α <- max(0, α)
-    α = α * pinv(sum(b.*α), 10^(-20))               # α <- α / bᵀα
-    X_te_α = Xte * α
-    score = mean(log(Xte_α))
+    α = α + b*(1-sum(b.*α))*pinv(c)     # α <- α + (1 - bᵀα)b / c, c := bᵀb
+    α = max.(0, α)                      # α <- max(0, α)
+    α = α * pinv(sum(b.*α))             # α <- α / bᵀα
+    Xte_α = Xte * α
+    score = mean(log.(Xte_α))
     return α, Xte_α, score
 end
 
@@ -43,7 +51,7 @@ function KLIEP_solve(mean_X_de, X_nu)
     n_nu, nc = size(X_nu)
 
     itm = 100
-    ϵ_list = 10.^(3:-1:-3)
+    η_list = 10.0.^(3:-1:-3)
     c = sum(mean_X_de.^2)
     α = ones(nc, 1)
     α, X_nu_α, score = KLIEP_projection(α, X_nu, mean_X_de, c)
@@ -63,9 +71,10 @@ function KLIEP_solve(mean_X_de, X_nu)
             X_nu_α = X_nu_α_new
         end
     end
+    return α, score
 end
 
-function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0, b=100, fold=5)
+function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0.0, b=100, fold=5)
     """
     KL-divergence Importance Estimation Procedure with Cross-Validation
 
@@ -84,8 +93,8 @@ function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0, b=100, fold=5)
     b = min(b, n_nu)
     x_ce = x_nu[:, randix[1:b]]         # centers for Gaussian dist
 
-    if ℓ_optimal == 0
-        ℓ = 10
+    if ℓ_optimal == 0.0
+        ℓ = 10.0
         score = -Inf
 
         for ϵ = log10(ℓ)-1:-1:-5
@@ -93,7 +102,7 @@ function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0, b=100, fold=5)
                 ℓ_new = ℓ - 10^ϵ
 
                 cv_index = randperm(n_nu)
-                cv_split = floor(Float64, [0:n_nu-1]*fold./n_nu) + 1
+                cv_split = floor.(collect(0:1:n_nu-1)*fold./n_nu) + 1
                 score_new = 0
 
                 X_nu = RBF(x_nu, x_ce; ℓ=ℓ_new)
@@ -101,8 +110,9 @@ function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0, b=100, fold=5)
                 mean_X_de = mean(X_de, 1)'
                 
                 for i = 1:fold
-                    α_cv = KLIEP_solve(mean_X_de, X_nu(cv_index(cv_split != i), :))
-                    wh_cv = X_nu(cv_index(cv_split != i), :) * α_cv
+                    α_cv = KLIEP_solve(mean_X_de, X_nu[cv_index[cv_split .!= i], :])
+                    println(α_cv)
+                    wh_cv = X_nu[cv_index[cv_split .!= i], :] * α_cv
                     score_new = score_new + mean(log(wh_cv))/fold
                 end
 
@@ -131,9 +141,6 @@ function KLIEP(x_nu, x_de; x_re=0, ℓ_optimal=0, b=100, fold=5)
     return wh_x_de, wh_x_re
 end
 
-function solve_KLIEP()
-end
-
 function main(args="")
     # create data for demo
     srand(12345678)
@@ -154,10 +161,9 @@ function main(args="")
     x_nu = μ_nu + σ_nu*randn(d, n_nu)
     x_de = μ_de + σ_de*randn(d, n_de)
 
-    println(size(x_nu))
-    println(size(x_de))
-
-    KLIEP(x_nu, x_de)  
+    KLIEP(x_nu, x_de)
+    
+    # plotting results
 end
 
 PROGRAM_FILE == "KLIEP.jl" && main(ARGS)
