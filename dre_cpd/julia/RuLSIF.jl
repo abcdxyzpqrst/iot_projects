@@ -1,4 +1,4 @@
-using NPZ, PyPlot
+using NPZ, PyPlot, CSV, DataFrames
 
 function comp_med(x)
     d, n = size(x)
@@ -51,8 +51,8 @@ function sliding_window(X, window_size, step)
 end
 
 function RuLSIF(x_de, x_nu, α, fold)
-    _, n_nu = size(x_nu)
-    _, n_de = size(x_de)
+    n_nu = size(x_nu, 1)
+    n_de = size(x_de, 1)
 
     b = min.(100, n_nu)
     idx = randperm(n_nu)
@@ -133,14 +133,10 @@ function changepoint_detection(X, n, k, α, fold)
         s, _, _, ℓ, λ = RuLSIF(Yref, Ytest, α, fold)
         push!(ℓ_track, ℓ)
         push!(λ_track, λ)
-
-        if (mod(t, 20) == 0)
-            println(t, "th loop finished")
-        end
-
         push!(SCORE, s)
         t += 1
     end
+    return SCORE, ℓ_track, λ_track
 end
 
 function demo()
@@ -148,14 +144,30 @@ function demo()
     n = 50
     k = 10
     α = 0.01
-    y = npzread("logwell.npy")
-
-    score1 = changepoint_detection(y, n, k, α, 5)
-    score2 = changepoint_detection(y[:, end:-1:1], n, k, α, 5)
+    fridge = npzread("SoundFridge.npy")
+    tv = npzread("SoundTV.npy")
+    y = cat(1, fridge, tv)
+    println(size(y))
+    score1, _, _ = changepoint_detection(y, n, k, α, 5)
+    println("forward finished")
+    score2, _, _ = changepoint_detection(y[:, end:-1:1], n, k, α, 5)
+    println("backward finished")
+    score2 = score2[end:-1:1]    
+    score = score1 .+ score2
     
-    score = score1 + score2
-    plot(collect(1:1:length(score)), score, color="red", linewidth=2.0, linestyle='-')
+    fig = figure()
+    subplot(2,1,1)
+    plot(collect(1:1:size(y,2)), y[1, :], label="Fridge")
+    plot(collect(1:1:size(y,2)), y[2, :], label="TV")
+    xticks([])
+    legend(loc="best")
+    title("Signal")
+
+    subplot(2,1,2)
+    plot(collect(1:1:length(score)), score, color="red", linewidth=2.0)
     title("Change-Point Score")
+    xticks([])
+    savefig("demo.png", bbox_inches="tight", transparent=false)
 end
 
 demo()
