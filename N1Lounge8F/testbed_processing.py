@@ -19,7 +19,7 @@ window = timedelta(minutes=args.window)
 def typecast(value):
     try:
         value = float(value)
-        return value
+        return [value]
     except:
         if value == 'true':
             return 1
@@ -40,6 +40,29 @@ def row_init(prev_row, timestamp):
     init_row['timestamp'] = timestamp
     assert len(prev_row) == len(init_row)
     return init_row
+
+
+def averaging_with_timestamp(lst):
+    if not isinstance(lst, list):
+        return lst
+    if lst:
+        if len(lst) == 1:
+            return lst[0][1]
+        area = 0
+        for i in range(len(lst) - 1):
+            t1, v1 = lst[i]
+            t2, v2 = lst[i+1]
+            h = t2 - t1
+            v = v1 + v2
+            area += v * h / 2
+        assert (lst[-1][0] - lst[0][0]) <= window.total_seconds()
+        last_interv = window.total_seconds() - (lst[-1][0] - lst[0][0])
+        area += last_interv * lst[-1][1]
+        value = float(area) / window.total_seconds()
+        return value
+    else:
+        return nan
+
 
 index = 0
 
@@ -63,17 +86,23 @@ The sensors can be categorized by:
    AD1-C:     cold water sensor (float)
 """
 
+row = {col: nan for col in columns}
+
 with open('n1lounge8f_06.csv', 'r') as f:
     csv_reader = csv.reader(f)
-    for row in csv_reader:
-        if row[0] == 'WebCamAgent':
+    for row_ in csv_reader:
+        if row_[0] == 'WebCamAgent':
             continue
-        key = (row[0], row[1])
-        value = row[2]
+        key = (row_[0], row_[1])
+        value = row_[2]
         value = typecast(value)
         if value is not None:
             features.add(key)
-        timestamp = int(row[3])
+        if isinstance(value, list):
+            row[key] = []
+        else:
+            row[key] = nan
+        timestamp = int(row_[3])
         #print(key, value, timestamp)
 
 features = list(sorted(features))
@@ -86,12 +115,10 @@ input()
 
 data = np.empty((0, len(columns)), dtype=object)
 
-row = {col: nan for col in columns}
+
 with open('n1lounge8f_06.csv', 'r') as f:
     csv_reader = csv.reader(f)
     for row_ in csv_reader:
-        #if row[0] == 'WebCamAgent':
-        #    continue
         key = (row_[0], row_[1])
         value = row_[2]
         value = typecast(value)
@@ -99,23 +126,26 @@ with open('n1lounge8f_06.csv', 'r') as f:
             continue
         timestamp = int(row_[3]) // 1000
         timestamp = datetime.fromtimestamp(timestamp)
-        #print(key, value, timestamp)
-        #time = line[:2]
-        #timestamp = datetime.strptime(" ".join(time), "%Y-%m-%d %H:%M:%S")
         if window_start is None:
             window_start = timestamp
+            row['timestamp'] = window_start.timestamp()
             window_end = timestamp + window
-            #row = row_init(row, window_start)
         if window_end < timestamp:
-            data = np.append(data, np.array([[row[key] for key in columns]],
+            record = {key: averaging_with_timestamp(row[key]) for key in row.keys()}
+            data = np.append(data, np.array([[record[key] for key in columns]],
                 dtype=object), axis=0)  # record history
             while window_end < timestamp: # jumps
                 window_start = window_end
                 window_end = window_start + window
-                #row = row_init(row, window_start)
                 row['timestamp'] = window_start.timestamp()
+                # row init
+                row = {key: [(window_start.timestamp(), record[key])] if (isinstance(row[key], list) and row[key]) else row[key]
+                        for key in row.keys()}
         # take the last value
-        row[key] = value
+        if isinstance(row[key], list):
+            row[key].append((timestamp.timestamp(), value[0]))
+        else:
+            row[key] = value
 
 
 df = pd.DataFrame(data, columns=columns)
