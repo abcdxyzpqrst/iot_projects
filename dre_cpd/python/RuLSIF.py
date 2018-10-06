@@ -247,7 +247,7 @@ def demo():
     alpha = 0.01
     n = 50
     k = 10
-    y = sio.loadmat("logwell.mat")['y']
+    y = sio.loadmat("../logwell.mat")['y']
     score1 = changepoint_detection(y, n, k, alpha, 5)
     score2 = changepoint_detection(np.flip(y, axis=1), n, k, alpha, 5)
     score2 = score2[::-1]
@@ -265,7 +265,7 @@ def demo():
 
     ax2.plot(np.arange(0, len(score)), score, color='r', linestyle='-', linewidth=2)
     ax2.set_title("Change-Point Score")
-    plt.show()
+    plt.savefig("python-changepointscore.png", bbox_tight=True, transparent=True)
 
 
 if __name__ == "__main__":

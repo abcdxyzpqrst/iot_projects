@@ -1,4 +1,4 @@
-using NPZ, PyPlot, CSV, DataFrames
+using PyPlot, Pandas, NPZ
 
 function comp_med(x)
     d, n = size(x)
@@ -51,17 +51,17 @@ function sliding_window(X, window_size, step)
 end
 
 function RuLSIF(x_de, x_nu, α, fold)
-    n_nu = size(x_nu, 1)
-    n_de = size(x_de, 1)
+    n_nu = size(x_nu, 2)
+    n_de = size(x_de, 2)
 
     b = min.(100, n_nu)
     idx = randperm(n_nu)
     x_ce = x_nu[:, idx[1:b]]
 
-    _, n_ce = size(x_ce)
+    n_ce = size(x_ce, 2)
     x = cat(2, x_de, x_nu)
-    med = comp_med(x)
-    ℓ_list = med * [0.6, 0.8, 1.0, 1.2, 1.4]
+    #med = comp_med(x)
+    ℓ_list = 1 * [0.6, 0.8, 1.0, 1.2, 1.4]
     λ_list = 10.0.^collect(-3:1:1)
 
     dist2_de = comp_dist(x_de, x_ce)
@@ -98,7 +98,9 @@ function RuLSIF(x_de, x_nu, α, fold)
     i_min, j_min = ind2sub(size(score), indmin(score))
     ℓ_optimal = ℓ_list[i_min]
     λ_optimal = λ_list[j_min]
-
+    
+    #ℓ_optimal = 2.0
+    #λ_optimal = 0.1
     k_de = kernel_rbf(dist2_de', ℓ_optimal)
     k_nu = kernel_rbf(dist2_nu', ℓ_optimal)
 
@@ -139,35 +141,112 @@ function changepoint_detection(X, n, k, α, fold)
     return SCORE, ℓ_track, λ_track
 end
 
+function Gaussian_normalize(y)
+    # standard normal distribution
+    μ = mean(y, 2)
+    σ = std(y, 2)
+    return (y .- μ) ./ σ
+end
+
+function minmax_normalize(y)
+    m = minimum(y, 2)
+    M = maximum(y, 2)
+    δ = M .- m          # largest difference
+    return y ./ δ
+end
+
+function labeling(y)
+    idx = []
+    for i in eachindex(y)
+        if y[i] == 1
+            push!(idx, i)
+        end
+    end
+    return idx
+end
+
+function F1_score(true_label, pred_label)
+    n_step = 20
+    success = 0
+    checked = []
+    for cp in true_label
+        for j = -n_step:n_step
+            if cp + j in pred_label
+                if cp + j in checked
+                    nothing
+                else
+                    success += 1
+                    push!(checked, cp + j)
+                    break
+                end
+            end
+        end
+    end
+    println(success/length(true_label))
+end
+
 function demo()
     srand(1)
-    n = 50
-    k = 10
+    n = 20
+    k = 4
     α = 0.01
-    fridge = npzread("SoundFridge.npy")
-    tv = npzread("SoundTV.npy")
-    y = cat(1, fridge, tv)
+    data = read_csv("../../N1Lounge8F_06/n1lounge8f_06_5.csv")
+    cols = columns(data)
+    
+    # sensor names
+    name1 = "('AirMonitorAgent', 'CarbonDioxide')"
+    name2 = "('SoundSensorAgent', 'SoundFridge')"
+    #name3 = "('SoundSensorAgent', 'SoundRightWall3')"
+    name3 = "('DoorAgent', 'CorrectedUserCount')"
+
+    # data preparation
+    features = values(data[[name1, name2, name3]])[3600:5600, :]'
+    label = values(data["changepoint"])[3600:5600, :]'
+    y = Gaussian_normalize(features)
     println(size(y))
+    true_label = labeling(label)
+    
     score1, _, _ = changepoint_detection(y, n, k, α, 5)
     println("forward finished")
     score2, _, _ = changepoint_detection(y[:, end:-1:1], n, k, α, 5)
     println("backward finished")
     score2 = score2[end:-1:1]    
     score = score1 .+ score2
+    println(length(score))
+    println(true_label)
+    
+    #npzwrite("score.npy", score)
+    μ = 85                      # threshold
+    pred_label = []
+    for j in eachindex(score)
+        if score[j] ≥ μ
+            push!(pred_label, j)
+        end
+    end
+    pred_label = 23 .+ pred_label
+    println(pred_label)
     
     fig = figure()
-    subplot(2,1,1)
-    plot(collect(1:1:size(y,2)), y[1, :], label="Fridge")
-    plot(collect(1:1:size(y,2)), y[2, :], label="TV")
-    xticks([])
-    legend(loc="best")
-    title("Signal")
+    rc("text", usetex=true)
+    rc("font", family="Times New Roman", size=12)
 
+    subplot(2,1,1)
+    plot(collect(1:1:length(y[1, :])), y[1, :], alpha=0.75, linewidth=1, label="CarbonDioxide")
+    plot(collect(1:1:length(y[2, :])), y[2, :], alpha=0.75, linewidth=1, label="SoundFridge")
+    plot(collect(1:1:length(y[3, :])), y[3, :], alpha=0.75, linewidth=1, label="CorrectedUserCount")
+    plot(true_label, -1 * ones(length(true_label)), "x", ms=7, label="True Changepoint")
+    plot(pred_label, -2 * ones(length(pred_label)), "x", ms=7, label="Predicted Changepoint")
+    xticks([])
+    legend(loc=2)
+    title("Sensor Signals")
+    
+    println(F1_score(true_label, pred_label))
     subplot(2,1,2)
     plot(collect(1:1:length(score)), score, color="red", linewidth=2.0)
     title("Change-Point Score")
     xticks([])
-    savefig("demo.png", bbox_inches="tight", transparent=false)
+    savefig("Changepoint.png", dpi=800, bbox_inches="tight", transparent=false)
+    show()
 end
 
 demo()
