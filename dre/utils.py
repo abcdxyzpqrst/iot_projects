@@ -69,11 +69,11 @@ class IoTCNNDataset(Dataset):
                     self.window]
 
         label = self.labels[(idx + self.n)*self.jump:
-                (idx + 2* self.n - 1)* self.jump + self.window]
+                (idx + self.n)*self.jump + self.window]
         label = 1 if np.any(label == 1) else 0
         if idx > 0:
             prev_label = self.labels[(idx-1 + self.n) * self.jump:
-                    (idx - 1 + 2*self.n - 1)*self.jump + self.window]
+                    (idx - 1 + self.n)*self.jump + self.window]
             #prev_label = self.labels[(idx - 1) * self.jump + self.window * self.n
             #        :(idx-1)*self.jump + self.window * self.n + self.window]
             prev_label = 1 if np.any(prev_label == 1) else 0
