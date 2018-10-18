@@ -6,6 +6,8 @@ import torch
 from torch.nn import Module
 from torch.distributions.multivariate_normal import MultivariateNormal
 from utils import calc_f_mean_var
+from torchviz import make_dot
+
 
 class BOCPD_GPTS(Module):
     def __init__(self, X, Y, gpts, hazard):
@@ -17,15 +19,15 @@ class BOCPD_GPTS(Module):
     def getLikelihood(self):
         """
         Learning will be done for only training data
-        """   
+        """
         T = self.Y.shape[0]                              # Duration
         H = self.hazard(torch.arange(1, T+1))       # Hazard values
         R = torch.zeros((T+1, 1))
-        S = torch.zeros((T, T)) 
-    
+        S = torch.zeros((T, T))
+
         nlml = torch.zeros(1)
         Z = torch.zeros((T, 1))
-        
+
         # we should remove all the in-place operations
         # --> 1. try clone() method
         #     2. ...
@@ -33,7 +35,7 @@ class BOCPD_GPTS(Module):
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(self.gpts.window_size, t)
-            
+
             # no previous data --> GP prior
             if MRC == 1:
                 upm = self.multivariate_normal_pdf(self.Y[0], torch.zeros(1), self.gpts.kernel(self.X[0].expand(1, self.gpts.n_features)))      # first datum
@@ -46,7 +48,7 @@ class BOCPD_GPTS(Module):
             else:
                 X = self.X[t-MRC : t-1]
                 Y = self.Y[t-MRC : t-1]
-            
+
                 # compute upm's for r_t-1 = 1 ~ t-1
                 fmean, fvar = calc_f_mean_var(X, Y, self.X[t-1].expand(1, self.gpts.n_features), self.gpts.kernel, self.gpts.log_noise)
                 d = MultivariateNormal(fmean, fvar)
@@ -54,14 +56,18 @@ class BOCPD_GPTS(Module):
                 # r_t-1 = 0, r_t-1 = 1 ~ t-1
                 upm = self.multivariate_normal_pdf(self.Y[t-1], torch.zeros(1), self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))).squeeze(dim=1)
                 upm = torch.cat((upm, torch.exp(d.log_prob(self.Y[t-1]))), 0)
-                
+                g = make_dot(upm, self.state_dict())
+                g.view()
+                print(upm)
                 tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=0, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t]))), 0).view(-1, 1)
                 nlml += tmp.sum()
                 tmp /= tmp.sum()
                 tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
                 R = torch.cat((R, tmp), 1)
+            print(R, t)
+            input()
         return nlml
-     
+
     def changepoint_train(self):
         print ("##### Changepoint training start !! #####")
         print ("#####    optimization in progress....    ")
@@ -90,16 +96,16 @@ class BOCPD_GPTS(Module):
         posterior[i,j] means p(r_t = i | x{1:j})
 
         Y:  whole data (train + test)
-        K:  window size (how much we look back?) 
+        K:  window size (how much we look back?)
         """
         T = self.Y.shape[0]                              # Duration
         H = self.hazard(torch.arange(1, T+1))       # Hazard values
         R = torch.zeros((T+1, 1))
-        S = torch.zeros((T, T)) 
-        
+        S = torch.zeros((T, T))
+
         print ("Test time: ", T, " Window size: ", K)
         Z = torch.zeros((T, 1))
-        
+
         # we should remove all the in-place operations
         # --> 1. try clone() method
         #     2. ...
@@ -107,7 +113,7 @@ class BOCPD_GPTS(Module):
         noise = torch.exp(self.gpts.log_noise)
         for t in range(1, T+1):
             MRC = min(K, t)
-            
+
             # no previous data --> GP prior
             if MRC == 1:
                 upm = self.multivariate_normal_pdf(self.Y[0], torch.zeros(1), self.gpts.kernel(self.X[0].expand(1, self.gpts.n_features)))      # first datum
@@ -120,7 +126,7 @@ class BOCPD_GPTS(Module):
             else:
                 X = self.X[t-MRC : t-1]
                 Y = self.Y[t-MRC : t-1]
-            
+
                 # compute upm's for r_t-1 = 1 ~ t-1
                 fmean, fvar = calc_f_mean_var(X, Y, self.X[t-1].expand(1, self.gpts.n_features), self.gpts.kernel, self.gpts.log_noise)
                 d = MultivariateNormal(fmean, fvar)
@@ -128,11 +134,11 @@ class BOCPD_GPTS(Module):
                 # r_t-1 = 0, r_t-1 = 1 ~ t-1
                 upm = self.multivariate_normal_pdf(self.Y[t-1], torch.zeros(1), self.gpts.kernel(self.X[t-1].expand(1, self.gpts.n_features))).squeeze(dim=1)
                 upm = torch.cat((upm, torch.exp(d.log_prob(self.Y[t-1]))), 0)
-                
+
                 tmp = torch.cat((torch.sum(R[:t, t-1] * upm * H[:t], dim=0, keepdim=True), (R[:t, t-1] * upm * (1 - H[:t]))), 0).view(-1, 1)
                 Z[t-1, 0] = tmp.sum()
                 tmp /= tmp.sum()
                 tmp = torch.cat((tmp, torch.zeros((T-t, 1))), 0)
                 R = torch.cat((R, tmp), 1)
-        
+
         return R

@@ -37,9 +37,9 @@ elif args.type == 'gpu':
 for times in range(n_rsc):
     # how many jops run on each gpu ?
     GPUqueue.put(times)
-    GPUqueue.put(times)
-    GPUqueue.put(times)
-    GPUqueue.put(times)
+    #GPUqueue.put(times)
+    #GPUqueue.put(times)
+    #GPUqueue.put(times)
 
 
 def launch_experiment(x):
@@ -91,7 +91,7 @@ print("Data is ready.")
 print("Using {0} workers.".format(n_rsc))
 
 # Launch processes for experiment
-pool = Pool(processes=n_rsc * 4, initializer=distribute_gpu, initargs=(GPUqueue,), maxtasksperchild=1)
+pool = Pool(processes=n_rsc, initializer=distribute_gpu, initargs=(GPUqueue,), maxtasksperchild=1)
 a = pool.map(launch_experiment, todo)
 
 

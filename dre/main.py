@@ -23,7 +23,8 @@ except:
     plt = None
 
 def train(n_epochs, data_loader, kdr, device, val_loader=None,
-        model_save_path=None, result_save_path=None, plot=True, window=6):
+        model_save_path=None, result_save_path=None, plot=True, window=6,
+        train_loader_seq=None):
     # n : how many windows to be grouped? batch_size should be multiple of n
     batch_size  = data_loader.batch_size
     optimizer = optim.Adam(kdr.parameters(), lr=0.0005)
@@ -58,6 +59,22 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
 
         # validation
         if val_loader is not None:
+            print("============================== start trainset test")
+            all_score = []
+            all_loss = []
+            all_true_y = []
+            for val_X_ref, val_X_test, val_y in tqdm(train_loader_seq):
+                val_X_ref = val_X_ref.to(device)
+                val_X_test = val_X_test.to(device)
+                val_J, val_loss = kdr(val_X_ref, val_X_test, None)
+                all_score.append(val_J.detach())
+                all_loss.append(val_loss.detach())
+                all_true_y.append(val_y.detach())
+            tr_all_score = torch.cat(all_score, dim=0).cpu().numpy()
+            tr_all_true_y = torch.cat(all_true_y, dim=0).cpu().numpy()
+            tr_all_loss = torch.stack(all_loss).mean().cpu().numpy()
+            print("Train loss", tr_all_loss)
+
             print("============================== start validation")
             all_score = []
             all_loss = []
@@ -76,14 +93,21 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
 
             thrs_l = np.linspace(0, 6, num=50)
             #window = 6
+
+            tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window) \
+                    for thrs in thrs_l]
+            tr_precisions, tr_recalls, tr_f1s = zip(*tr_eval)
             eval = [f1_score(all_score, all_true_y, thrs, window) \
                     for thrs in thrs_l]
             precisions, recalls, f1s = zip(*eval)
-            max_ind = np.argmax(f1s)
+            max_ind = np.argmax(tr_f1s)
+
+            tr_f1 = tr_f1s[max_ind]
             f1 = f1s[max_ind]
             thrs = thrs_l[max_ind]
 
-            print("F1 score", f1)
+            print("F1 score", tr_f1, f1)
+
             if f1 > best_val_score and model_save_path is not None:
                 torch.save(kdr.state_dict(), model_save_path)
                 best_model_loss = all_loss
@@ -97,7 +121,7 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
                     writer = csv.DictWriter(csvfile, fieldnames)
                     writer.writeheader()
                     writer.writerow({'train_loss': train_loss,
-                                     'train_f1': train_f1,
+                                     'train_f1': tr_f1,
                                      'val_loss': best_model_loss,
                                      'val_f1': best_model_f1})
             # matplotlib 으로 그리기
@@ -106,7 +130,16 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
                     plt.clf()
                     plt.cla()
                     plt.close()
-                    fig = plt.figure(figsize=(30, 4.8))
+                    fig = plt.figure(figsize=(30, 8))
+                    fig.add_subplot(211)
+                    plt.plot(np.arange(len(tr_all_score)), tr_all_score, zorder=1)
+                    plt.scatter(np.where(tr_all_true_y == 1)[0], tr_all_true_y[tr_all_true_y== 1],
+                        marker='x', c='r', zorder=2)
+                    plt.scatter(np.where(tr_all_score > thrs)[0],
+                            np.ones_like(np.where(tr_all_score > thrs)[0]) * thrs,
+                            marker='o', c='r', zorder=3)
+
+                    fig.add_subplot(212)
                     plt.plot(np.arange(len(all_score)), all_score, zorder=1)
                     plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1],
                         marker='x', c='r', zorder=2)
@@ -122,7 +155,7 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
 
 def main(conf):
     # Data Load
-    train_loader, val_loader, window, input_dim = \
+    train_loader, val_loader, train_loader_seq, window, input_dim = \
         data_load(filename='../N1Lounge8F_06/n1lounge8f_06_nonempty.csv',
             validation_split=conf['validation_split'],
             window=conf['window'], jump=conf['jump'], n=conf['group_size'],
@@ -148,7 +181,7 @@ def main(conf):
         model_save_path=conf['model_save_path'],
         result_save_path=conf['result_save_path'],
         plot=True,#conf.get('plot', True),
-        window=int(window/conf['jump']))
+        window=int(window/conf['jump']), train_loader_seq=train_loader_seq)
     #x_datetime = data['timestamp'].values[30:10037]
     #x_datetime = [np.datetime64(datetime.fromtimestamp(x), 's') for x in x_datetime]
 

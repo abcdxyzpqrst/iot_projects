@@ -97,12 +97,15 @@ def data_load(filename='../N1Lounge8F_06/n1lounge8f_06_10sec.csv',
     train_indices, val_indices = indices[:split], indices[split:]
 
     train_sampler = SubsetRandomSampler(train_indices)
+    train_sampler_seq = SubsetSequentialSampler(train_indices)
     val_sampler = SubsetSequentialSampler(val_indices)
-    train_loader = DataLoader(n1lounge, batch_size=batch_size, num_workers=4,
+    train_loader = DataLoader(n1lounge, batch_size=batch_size, num_workers=10,
             sampler=train_sampler)
-    val_loader = DataLoader(n1lounge, batch_size=batch_size, num_workers=1,
+    train_loader_seq = DataLoader(n1lounge, batch_size=batch_size, num_workers=10,
+            sampler=train_sampler_seq)
+    val_loader = DataLoader(n1lounge, batch_size=batch_size, num_workers=10,
             sampler=val_sampler)
-    return train_loader, val_loader, n1lounge.shape[0], n1lounge.shape[1]
+    return train_loader, val_loader, train_loader_seq, n1lounge.shape[0], n1lounge.shape[1]
 
 
 if __name__ == '__main__':

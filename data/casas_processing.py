@@ -44,6 +44,18 @@ tasks = ['Clean',
    'Wash_Bathtub',
    'Watch_TV']
 
+"""
+The sensors can be categorized by:
+
+   Mxx:       motion sensor (ON/OFF)
+   Lxx: ON / OFF
+   Ixx:       item sensor for selected items in the kitchen PRESENT/ABSENT
+   Dxx:       door sensor (OPEN/CLOSE)
+   AD1-A:     burner sensor (float)
+   AD1-B:     hot water sensor (float)
+   AD1-C:     cold water sensor (float)
+"""
+
 with open('raw/casas/twor.2009/data', 'r') as f:
     for line in f:
         line = line.split()

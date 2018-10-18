@@ -13,12 +13,13 @@ import glob
 
 nan = np.nan
 parser = argparse.ArgumentParser()
-parser.add_argument("--window", type=int, help="window length in minute",
-        default=1)
+parser.add_argument("--window", type=int, help="window length in seconds",
+        default=10)
 args = parser.parse_args()
 
 
-window = timedelta(minutes=args.window)
+#window = timedelta(minutes=args.window)
+window = timedelta(seconds=args.window)
 
 def typecast(value):
     try:
@@ -93,7 +94,7 @@ The sensors can be categorized by:
 row = {col: nan for col in columns}
 
 all = glob.glob("N1Lounge8F_2018-06-*.csv")
-all = sorted(all)
+all = sorted(all) # time order
 
 for filename in all:
  with open(filename, 'r') as f:
@@ -146,8 +147,8 @@ for filename in all:
             window_end = timestamp + window
             # row init
             print("row init")
-            row = {key: [(window_start.timestamp(), record[key])] if (isinstance(row[key], list) and row[key]) else row[key]
-                for key in row.keys()}
+            row = {key: [(window_start.timestamp(), record[key])] if (isinstance(row[key], list) and row[key])
+                    else row[key] for key in row.keys()}
         if window_end < timestamp:
             record = {key: averaging_with_timestamp(row[key]) for key in row.keys()}
             data = np.append(data, np.array([[record[key] for key in columns]],
@@ -175,6 +176,16 @@ df = pd.DataFrame(data, columns=columns)
 df.set_index('timestamp')
 
 smoothing_list = \
+[('AirMonitorAgent', 'CarbonDioxide')]#, #conti
+#('AirMonitorAgent', 'ParticulateMatter'), #conti
+#('AirMonitorAgent', 'VolatileCompounds'), #conti
+#('DoorAgent', 'CorrectedUserCount'), #integer
+#('LoungeMonnitServerAgent', 'totalSeatCount'), #integer
+#('SoundSensorAgent', 'SoundFridge'), #conti
+#('SoundSensorAgent', 'SoundRightWall3'), #conti
+#('SoundSensorAgent', 'SoundTV')] #conti
+
+'''
 [('LoungeMonnitServerAgent', 'seat1'), #binary
 ('LoungeMonnitServerAgent', 'seat2'), #binary
 ('LoungeMonnitServerAgent', 'seat3'), #binary
@@ -196,7 +207,7 @@ smoothing_list = \
 ('LoungeMonnitServerAgent', 'MVendingMachine'), #binary
 ('DoorAgent', 'UserCount'), #integer
 ('DoorAgent', 'CorrectedUserCount')] #integer
-
+'''
 
 M_list = \
 [('LoungeMonnitServerAgent', 'MDoor'), #binary
@@ -206,11 +217,10 @@ M_list = \
 ('LoungeMonnitServerAgent', 'MStair'), #binary
 ('LoungeMonnitServerAgent', 'MVendingMachine')] #binary
 
-'''
 from sklearn.gaussian_process import GaussianProcessRegressor
-
+'''
 for key in smoothing_list:
-    x = df['timestamp'].values / 1000000
+    x = np.arange(len(df['timestamp'].values)) #/ 1000000
     y = df[key].values
     x = x[pd.notnull(y)]
     y = y[pd.notnull(y)]
@@ -221,10 +231,15 @@ for key in smoothing_list:
     #gp.fit(x.reshape(-1, 1), y)
     #y_int = gp.predict(x_int.reshape(-1, 1))
 
-    tck = interpolate.splrep(x, y, k=3, s=1000)
+    tck = interpolate.splrep(x, y, k=3, s=100000)
     y_int = interpolate.splev(x_int, tck, der=0)
-    #print(y_int)
+    y_smoothing = interpolate.splev(x, tck, der=0)
+    df.loc[x, key] = y_smoothing
+    #print(df[key].loc[x])
+    #print(y_smoothing)
     #input()
+
+    #print(y_int)
     fig = plt.figure(str(key))
     plt.subplot(111)
     plt.plot(x, y, marker='o', linestyle='', alpha=0.5, color='r')
@@ -233,15 +248,14 @@ for key in smoothing_list:
     plt.ylabel("Y")
 plt.show()
 
-'''
 #df[categorical] = df[categorical].apply(lambda x: x.cat.codes)
 print(df)
 print(data)
-
-with open('n1lounge8f_06_{}.df'.format(args.window), 'wb') as f:
+'''
+with open('n1lounge8f_06_{}sec.df'.format(args.window), 'wb') as f:
    pk.dump(df, f)
 
-df.to_csv('n1lounge8f_06_{}.csv'.format(args.window))
+df.to_csv('n1lounge8f_06_{}sec.csv'.format(args.window))
 
 
 

@@ -22,8 +22,9 @@ def typecast(value):
         return value
 
 def row_init(prev_row, timestamp):
-    init_row = {c:prev_row[c] for c in prev_row if c[0] in ["P", "I", "T", "L"]}
+    init_row = {c:prev_row[c] for c in prev_row if c[0] in ["P", "I", "L"]}
     init_row.update({c:0 for c in prev_row if c[0] in ["A", "D", "M"]})
+    init_row.update({c:[] for c in prev_row if c[0] in ["T"]})
     init_row['timestamp'] = timestamp
     assert len(prev_row) == len(init_row)
     return init_row
@@ -50,7 +51,7 @@ The sensors can be categorized by:
    AD1-C:     cold water sensor (float)
 """
 
-with open('raw/casas/twor.2009/raw', 'r') as f:
+with open('raw/casas/twor.summer.2009/annotated', 'r') as f:
     for line in f:
         line = line.split()
         feature = line[2]
@@ -66,7 +67,7 @@ data = np.empty((0, len(columns)), dtype=object)
 
 row = {col: nan for col in columns}
 P = []
-with open('raw/casas/twor.2009/raw', 'r') as f:
+with open('raw/casas/twor.summer.2009/annotated', 'r') as f:
     for line in f:
         line = line.split()
         line[1] = line[1].split(".")[0]
@@ -77,7 +78,11 @@ with open('raw/casas/twor.2009/raw', 'r') as f:
             window_end = timestamp + window
             row = row_init(row, window_start)
         if window_end < timestamp:
-            row['P001'] = np.mean(P)
+            if len(P) > 0:
+                row['P001'] = np.mean(P)
+            for key in row:
+                if key[0] == 'T':
+                    row[key] = np.mean(row[key])
             P = []
             data = np.append(data, np.array([[row[key] for key in columns]],
                 dtype=object), axis=0)  # record history
@@ -99,7 +104,7 @@ with open('raw/casas/twor.2009/raw', 'r') as f:
             elif line[2][0] == "I":
                 row[line[2]] = 1 if line[3] == "PRESENT" else 0
             elif line[2][0] == "T":
-                row[line[2]] = float(line[3])
+                row[line[2]].append(float(line[3]))
             elif line[2][0] == "L":
                 row[line[2]] = 1 if line[3] == "ON" else 0
             else:
@@ -124,7 +129,7 @@ describe = df.describe()
 print(df)
 print(data)
 
-with open('processed/casas_raw_{}.df'.format(args.window), 'wb') as f:
+with open('processed/casas_summer_raw_{}.df'.format(args.window), 'wb') as f:
    pk.dump(df, f)
 
-df.to_csv('processed/casas_raw_{}.csv'.format(args.window))
+df.to_csv('processed/casas_summer_raw_{}.csv'.format(args.window))

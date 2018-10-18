@@ -5,10 +5,20 @@ import matplotlib.dates as mdates
 import matplotlib.cbook as cbook
 from datetime import datetime
 
+#cols =\
+#[('AirMonitorAgent', 'CarbonDioxide'), #conti
+#('AirMonitorAgent', 'ParticulateMatter'), #conti
+#('AirMonitorAgent', 'VolatileCompounds'), #conti
+#('DoorAgent', 'CorrectedUserCount'), #integer
+#('LoungeMonnitServerAgent', 'totalSeatCount'), #integer
+#('SoundSensorAgent', 'SoundFridge'), #conti
+#('SoundSensorAgent', 'SoundRightWall3'), #conti
+#('SoundSensorAgent', 'SoundTV')]#, conti
+#
 def main():
-    data = pandas.read_csv("n1lounge8f_06_10.csv")
+    data = pandas.read_csv("n1lounge8f_06_nonempty.csv")
     cols = data.columns
-
+    #print(cols)
     #x_datetime = data['timestamp'].values
     #x_datetime = [np.datetime64(datetime.fromtimestamp(x), 's') for x in x_datetime]
 
@@ -58,7 +68,7 @@ def main():
             flag += 1
             continue
         cnt += 1
-        tmp = np.asarray(data[name])
+        tmp = np.asarray(data[str(name)])
 
         ax = plt.subplot(8, 1, cnt)
         ax.plot(x, tmp)
@@ -84,6 +94,7 @@ def main():
             cnt = 0
         else:
             pass
+    plt.show()
     return
 
 if __name__ == "__main__":
