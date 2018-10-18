@@ -26,13 +26,13 @@ def csv_load(filename):#$, window=6, jump=1):
     df = df.iloc[:, 2:]
     df = df.fillna(method='backfill')
 
-    #min_max_scaler = preprocessing.MinMaxScaler()
-    #nm_scaled = min_max_scaler.fit_transform(df)
+    min_max_scaler = preprocessing.MinMaxScaler()
+    nm_scaled = min_max_scaler.fit_transform(df)
 
-    std_scaler = preprocessing.StandardScaler()
-    std_scaled = std_scaler.fit_transform(df)
+    #std_scaler = preprocessing.StandardScaler()
+    #std_scaled = std_scaler.fit_transform(df)
 
-    values = std_scaled #df.values
+    values = nm_scaled #std_scaled #df.values
     return values.astype(np.float32), label
 
 class IoTCNNDataset(Dataset):

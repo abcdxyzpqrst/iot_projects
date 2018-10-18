@@ -103,10 +103,17 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
             max_ind = np.argmax(tr_f1s)
 
             tr_f1 = tr_f1s[max_ind]
+            tr_precision = tr_precisions[max_ind]
+            tr_recall = tr_recalls[max_ind]
+
             f1 = f1s[max_ind]
+            precision = precisions[max_ind]
+            recall = recalls[max_ind]
             thrs = thrs_l[max_ind]
 
             print("F1 score", tr_f1, f1)
+            print("train precision recall", tr_precision, tr_recall)
+            print("val precision recall", precision, recall)
 
             if f1 > best_val_score and model_save_path is not None:
                 torch.save(kdr.state_dict(), model_save_path)
