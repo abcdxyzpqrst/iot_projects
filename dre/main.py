@@ -1,4 +1,6 @@
 import torch
+import os
+import csv
 import argparse
 #from model.1dcnn import DCNN
 try:
@@ -14,12 +16,14 @@ except:
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
+import yaml
 try:
     import matplotlib.pyplot as plt
 except:
     plt = None
 
-def train(n_epochs, data_loader, kdr, device, val_loader=None, save_path=None):
+def train(n_epochs, data_loader, kdr, device, val_loader=None,
+        model_save_path=None, result_save_path=None, plot=True, window=6):
     # n : how many windows to be grouped? batch_size should be multiple of n
     batch_size  = data_loader.batch_size
     optimizer = optim.Adam(kdr.parameters(), lr=0.0005)
@@ -49,6 +53,8 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None, save_path=None):
         all_score = torch.cat(all_score, dim=0).numpy()
         all_loss = torch.stack(all_loss).mean().cpu().numpy()
         print("Training loss", all_loss)
+        train_loss = all_loss
+
 
         # validation
         if val_loader is not None:
@@ -56,7 +62,7 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None, save_path=None):
             all_score = []
             all_loss = []
             all_true_y = []
-            for val_X_ref, val_X_test, val_y in val_loader:
+            for val_X_ref, val_X_test, val_y in tqdm(val_loader):
                 val_X_ref = val_X_ref.to(device)
                 val_X_test = val_X_test.to(device)
                 val_J, val_loss = kdr(val_X_ref, val_X_test, None)
@@ -69,35 +75,55 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None, save_path=None):
             print("Validation loss", all_loss)
 
             thrs_l = np.linspace(0, 6, num=50)
-            window = 6
-            f1 = np.amax([f1_score(all_score, all_true_y, thrs, window)[2] for thrs
-                    in thrs_l])
+            #window = 6
+            eval = [f1_score(all_score, all_true_y, thrs, window) \
+                    for thrs in thrs_l]
+            precisions, recalls, f1s = zip(*eval)
+            max_ind = np.argmax(f1s)
+            f1 = f1s[max_ind]
+            thrs = thrs_l[max_ind]
+
             print("F1 score", f1)
-            if f1 > best_val_score and save_path is not None:
-                torch.save(kdr.state_dict(), save_path)
+            if f1 > best_val_score and model_save_path is not None:
+                torch.save(kdr.state_dict(), model_save_path)
                 best_model_loss = all_loss
                 best_model_score = all_score
                 best_model_f1 = f1
+                # TODO
+                fieldnames = ['train_loss', 'train_f1', 'val_loss', 'val_f1']
+                #train_loss = None
+                train_f1 = None
+                with open(result_save_path, 'w') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames)
+                    writer.writeheader()
+                    writer.writerow({'train_loss': train_loss,
+                                     'train_f1': train_f1,
+                                     'val_loss': best_model_loss,
+                                     'val_f1': best_model_f1})
             # matplotlib 으로 그리기
-            try:
-                plt.clf()
-                plt.cla()
-                plt.close()
-                fig = plt.figure(figsize=(30, 4.8))
-                plt.plot(np.arange(len(all_score)), all_score, zorder=1)
-                plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1],
-                    marker='x', c='r', zorder=2)
-                plt.pause(0.001)
-                plt.ion()
-                plt.show()
-                #plt.gcf().clear()
-            except:
-                pass
+            if plot:
+                try:
+                    plt.clf()
+                    plt.cla()
+                    plt.close()
+                    fig = plt.figure(figsize=(30, 4.8))
+                    plt.plot(np.arange(len(all_score)), all_score, zorder=1)
+                    plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1],
+                        marker='x', c='r', zorder=2)
+                    plt.scatter(np.where(all_score > thrs)[0],
+                            np.ones_like(np.where(all_score > thrs)[0]) * thrs,
+                            marker='o', c='r', zorder=3)
+                    plt.pause(0.001)
+                    plt.ion()
+                    plt.show()
+                    #plt.gcf().clear()
+                except:
+                    pass
 
 def main(conf):
     # Data Load
     train_loader, val_loader, window, input_dim = \
-        data_load(filename='../N1Lounge8F_06/n1lounge8f_06_10sec.csv',
+        data_load(filename='../N1Lounge8F_06/n1lounge8f_06_nonempty.csv',
             validation_split=conf['validation_split'],
             window=conf['window'], jump=conf['jump'], n=conf['group_size'],
             batch_size=conf['batch_size']) # jump * n / 2
@@ -119,7 +145,10 @@ def main(conf):
     #cols = data.columns
     n_epochs = conf['n_epochs']
     train(n_epochs, train_loader, kdr, device, val_loader,
-    save_path=conf['save_path'])
+        model_save_path=conf['model_save_path'],
+        result_save_path=conf['result_save_path'],
+        plot=True,#conf.get('plot', True),
+        window=int(window/conf['jump']))
     #x_datetime = data['timestamp'].values[30:10037]
     #x_datetime = [np.datetime64(datetime.fromtimestamp(x), 's') for x in x_datetime]
 
@@ -130,39 +159,47 @@ def main(conf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # Data
-    parser.add_argument('--validation_split', type=float, default=0.5)
-    parser.add_argument('--window', type=int, default=60,
-            help='data size')
-    parser.add_argument('--jump', type=int, default=3,
-            help='step size to jump')
-    parser.add_argument('--group_size', type=int, default=50,
-            help='n')
-    parser.add_argument('--batch_size', type=int, default=100,
-            help='batch_size')
-    # CNN
-    parser.add_argument('--embedding_dim', type=int, default=30,
-            help='CNN embedding dimension')
-    parser.add_argument('--conv_kernel', type=int, default=5,
-            help='1d CNN layer kernel size')
-    parser.add_argument('--n_channels', type=int, default=[50, 30, 10],
-            nargs='+')
-    parser.add_argument('--conv_stride', type=int, default=2,
-            help='1D CNN stride')
-    parser.add_argument('--pool_kernel', type=int, default=1,
-            help='pooling layer kernel size (== stride)')
-    # Kernel
-    parser.add_argument('--length_scale', type=int, default=1,
-            help='kernel length scale')
-    parser.add_argument('--alpha', type=float, default=0.01,
-            help='to control the weight of reference distribution for RuLSIF')
-    parser.add_argument('--reg_lambda', type=float, default=0.1,
-            help='regularization parameter to prevent overfitting for kernel \
-            model parameter theta')
-    # Training
-    parser.add_argument('--n_epochs', type=int, default=1000,
-            help='epochs')
-
-    conf = vars(parser.parse_args())
-    conf['save_path'] = 'best_param.model'
+    parser.add_argument('--config', type=str, default="configs/0.yaml")
+    args = parser.parse_args()
+    with open(args.config, "r") as f:
+        conf = yaml.load(f)
+    ## Data
+    #parser.add_argument('--validation_split', type=float, default=0.5)
+    #parser.add_argument('--window', type=int, default=60,
+    #        help='data size')
+    #parser.add_argument('--jump', type=int, default=3,
+    #        help='step size to jump')
+    #parser.add_argument('--group_size', type=int, default=50,
+    #        help='n')
+    #parser.add_argument('--batch_size', type=int, default=100,
+    #        help='batch_size')
+    ## CNN
+    #parser.add_argument('--embedding_dim', type=int, default=30,
+    #        help='CNN embedding dimension')
+    #parser.add_argument('--conv_kernel', type=int, default=5,
+    #        help='1d CNN layer kernel size')
+    #parser.add_argument('--n_channels', type=int, default=[50, 30, 10],
+    #        nargs='+')
+    #parser.add_argument('--conv_stride', type=int, default=2,
+    #        help='1D CNN stride')
+    #parser.add_argument('--pool_kernel', type=int, default=1,
+    #        help='pooling layer kernel size (== stride)')
+    ## Kernel
+    #parser.add_argument('--length_scale', type=int, default=1,
+    #        help='kernel length scale')
+    #parser.add_argument('--alpha', type=float, default=0.01,
+    #        help='to control the weight of reference distribution for RuLSIF')
+    #parser.add_argument('--reg_lambda', type=float, default=0.1,
+    #        help='regularization parameter to prevent overfitting for kernel \
+    #        model parameter theta')
+    ## Training
+    #parser.add_argument('--n_epochs', type=int, default=1000,
+    #        help='epochs')
+    #conf = vars(parser.parse_args())
+    if not os.path.exists('models'):
+        os.makedirs('models')
+    conf['model_save_path'] = 'models/best_param_conf{}.model'.format(conf['idx'])
+    if not os.path.exists('results'):
+        os.makedirs('results')
+    conf['result_save_path'] = 'results/conf{}.csv'.format(conf['idx'])
     main(conf)
