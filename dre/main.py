@@ -94,24 +94,28 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
             thrs_l = np.linspace(0, 6, num=50)
             #window = 6
 
-            tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window) \
+            tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window=5) \
                     for thrs in thrs_l]
-            tr_precisions, tr_recalls, tr_f1s = zip(*tr_eval)
-            eval = [f1_score(all_score, all_true_y, thrs, window) \
+            tr_precisions, tr_recalls, tr_f1s, tr_alarms = zip(*tr_eval)
+            eval = [f1_score(all_score, all_true_y, thrs, window=5) \
                     for thrs in thrs_l]
-            precisions, recalls, f1s = zip(*eval)
+            precisions, recalls, f1s, alarms = zip(*eval)
             max_ind = np.argmax(tr_f1s)
 
             tr_f1 = tr_f1s[max_ind]
             tr_precision = tr_precisions[max_ind]
             tr_recall = tr_recalls[max_ind]
+            tr_alarm = tr_alarms[max_ind]
+
+            max_ind = np.argmax(f1s)
 
             f1 = f1s[max_ind]
             precision = precisions[max_ind]
             recall = recalls[max_ind]
             thrs = thrs_l[max_ind]
-
-            print("F1 score", tr_f1, f1)
+            alarm = alarms[max_ind]
+            print("thrs: ", thrs)
+            print("F1 score: ", tr_f1, f1)
             print("train precision recall", tr_precision, tr_recall)
             print("val precision recall", precision, recall)
 
@@ -142,17 +146,20 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
                     plt.plot(np.arange(len(tr_all_score)), tr_all_score, zorder=1)
                     plt.scatter(np.where(tr_all_true_y == 1)[0], tr_all_true_y[tr_all_true_y== 1],
                         marker='x', c='r', zorder=2)
-                    plt.scatter(np.where(tr_all_score > thrs)[0],
-                            np.ones_like(np.where(tr_all_score > thrs)[0]) * thrs,
+                    plt.scatter(np.where(tr_alarm==1)[0], tr_alarm[tr_alarm==1] * thrs,
+                            #np.ones_like(np.where(tr_all_score > thrs)[0]) * thrs,
                             marker='o', c='r', zorder=3)
 
                     fig.add_subplot(212)
                     plt.plot(np.arange(len(all_score)), all_score, zorder=1)
                     plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1],
                         marker='x', c='r', zorder=2)
-                    plt.scatter(np.where(all_score > thrs)[0],
-                            np.ones_like(np.where(all_score > thrs)[0]) * thrs,
+                    plt.scatter(np.where(alarm==1)[0], alarm[alarm==1] * thrs,
+                            #np.ones_like(np.where(tr_all_score > thrs)[0]) * thrs,
                             marker='o', c='r', zorder=3)
+                    #plt.scatter(np.where(all_score > thrs)[0],
+                    #        np.ones_like(np.where(all_score > thrs)[0]) * thrs,
+                    #        marker='o', c='r', zorder=3)
                     plt.pause(0.001)
                     plt.ion()
                     plt.show()
@@ -163,9 +170,10 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
 def main(conf):
     # Data Load
     train_loader, val_loader, train_loader_seq, window, input_dim = \
-        data_load(filename='../N1Lounge8F_06/n1lounge8f_06_nonempty.csv',
+        data_load(filename='../aruba/processed.csv', #'../N1Lounge8F_06/n1lounge8f_06_nonempty.csv',
             validation_split=conf['validation_split'],
             window=conf['window'], jump=conf['jump'], n=conf['group_size'],
+            L=500,
             batch_size=conf['batch_size']) # jump * n / 2
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     # Model Construct

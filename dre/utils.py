@@ -36,8 +36,13 @@ def csv_load(filename):#$, window=6, jump=1):
     return values.astype(np.float32), label
 
 class IoTCNNDataset(Dataset):
-    def __init__(self, csv_file, window=6, jump=1, n=50):
+    def __init__(self, csv_file, window=6, jump=1, n=50, L=None):
         self.features, self.labels = csv_load(csv_file)
+        if L is not None:
+            self.features, self.labels = self.features[:L], self.labels[:L]
+        print(len(self.features))
+        print(self.labels.sum())
+        input()
         self.window = window
         self.jump = jump
         self.n = n
@@ -68,17 +73,19 @@ class IoTCNNDataset(Dataset):
             X_test[i] = features[self.jump*(i+self.n): self.jump*(i+self.n) +
                     self.window]
 
+        #label = self.labels[(idx + self.n)*self.jump:
+        #        (idx + self.n)*self.jump + self.window]
         label = self.labels[(idx + self.n)*self.jump:
-                (idx + self.n)*self.jump + self.window]
+                (idx + self.n)*self.jump + self.jump]
         label = 1 if np.any(label == 1) else 0
-        if idx > 0:
-            prev_label = self.labels[(idx-1 + self.n) * self.jump:
-                    (idx - 1 + self.n)*self.jump + self.window]
+        #if idx > 0:
+        #    prev_label = self.labels[(idx-1 + self.n) * self.jump:
+        #            (idx - 1 + self.n)*self.jump + self.window]
             #prev_label = self.labels[(idx - 1) * self.jump + self.window * self.n
             #        :(idx-1)*self.jump + self.window * self.n + self.window]
-            prev_label = 1 if np.any(prev_label == 1) else 0
-            if prev_label == 1:
-                label = 0
+        #    prev_label = 1 if np.any(prev_label == 1) else 0
+        #    if prev_label == 1:
+        #        label = 0
         #sample = {'features': features, 'label': label}
         return X_ref, X_test, label
 
@@ -86,9 +93,10 @@ class IoTCNNDataset(Dataset):
 
 def data_load(filename='../N1Lounge8F_06/n1lounge8f_06_10sec.csv',
                validation_split=0.5,
-               window=6, jump=1, batch_size=100, n=50):
-
-    n1lounge = IoTCNNDataset(filename, window=window, jump=jump, n=n)
+               window=6, jump=1, batch_size=100, n=50, L=None):
+    print("L", L)
+    print("n", n)
+    n1lounge = IoTCNNDataset(filename, window=window, jump=jump, n=n, L=L)
     # train, val split
     n_data = len(n1lounge)
     indices = np.array(range(n_data))
