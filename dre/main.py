@@ -22,10 +22,138 @@ try:
 except:
     plt = None
 
+
+
+def test(val_loader, train_loader_seq, kdr, model_save_path, device):
+    print("Final Test")
+    kdr.load_state_dict(torch.load(model_save_path))
+    '''
+    print("============================== Trainset")
+    all_score = []
+    all_loss = []
+    all_true_y = []
+
+
+    for val_X_ref, val_X_test, val_y in tqdm(train_loader_seq):
+        val_X_ref = val_X_ref.to(device)
+        val_X_test = val_X_test.to(device)
+        val_J, val_loss = kdr(val_X_ref, val_X_test, None)
+        all_score.append(val_J.detach())
+        all_loss.append(val_loss.detach())
+        all_true_y.append(val_y.detach())
+    tr_all_score = torch.cat(all_score, dim=0).cpu().numpy()
+    tr_all_true_y = torch.cat(all_true_y, dim=0).cpu().numpy()
+    tr_all_loss = torch.stack(all_loss).mean().cpu().numpy()
+    print("Train loss", tr_all_loss)
+    '''
+
+    print("============================== Validationset")
+    all_score = []
+    all_loss = []
+    all_true_y = []
+    for val_X_ref, val_X_test, val_y in tqdm(val_loader):
+        val_X_ref = val_X_ref.to(device)
+        val_X_test = val_X_test.to(device)
+        val_J, val_loss = kdr(val_X_ref, val_X_test, None)
+        all_score.append(val_J.detach())
+        all_loss.append(val_loss.detach())
+        all_true_y.append(val_y.detach())
+    all_score = torch.cat(all_score, dim=0).cpu().numpy()
+    all_true_y = torch.cat(all_true_y, dim=0).cpu().numpy()
+    all_loss = torch.stack(all_loss).mean().cpu().numpy()
+    print("Validation loss", all_loss)
+
+    #thrs_l = np.linspace(tr_all_score.min(), tr_all_score.max(), num=50)
+    #tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window=10) \
+    #        for thrs in thrs_l]
+    #tr_precisions, tr_recalls, tr_f1s, tr_alarms = zip(*tr_eval)
+
+    '''
+    thrs_l = np.linspace(all_score.min(), all_score.max(), num=50)
+    eval = [f1_score(all_score, all_true_y, thrs, window=10) \
+            for thrs in thrs_l]
+    precisions, recalls, f1s, alarms = zip(*eval)
+    max_ind = np.argmax(tr_f1s)
+
+    tr_f1 = tr_f1s[max_ind]
+    tr_precision = tr_precisions[max_ind]
+    tr_recall = tr_recalls[max_ind]
+    tr_thrs = thrs_l[max_ind]
+    tr_alarm = tr_alarms[max_ind]
+
+    max_ind = np.argmax(f1s)
+    f1 = f1s[max_ind]
+    precision = precisions[max_ind]
+    recall = recalls[max_ind]
+    thrs = thrs_l[max_ind]
+    alarm = alarms[max_ind]
+
+    print(tr_f1s)
+    print(f1s)
+    '''
+    '''
+    thrs_l = np.linspace(tr_all_score.min(), tr_all_score.max(), num=50)
+    tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window=10) \
+            for thrs in thrs_l]
+    tr_precisions, tr_recalls, tr_f1s, tr_alarms = zip(*tr_eval)
+    max_ind = np.argmax(tr_f1s)
+    tr_f1 = tr_f1s[max_ind]
+    tr_thrs = thrs_l[max_ind]
+    tr_precision = tr_precisions[max_ind]
+    tr_recall = tr_recalls[max_ind]
+    tr_alarm = tr_alarms[max_ind]
+    '''
+    thrs_l = np.linspace(all_score.min(), all_score.max(), num=50)
+    eval = [f1_score(all_score, all_true_y, thrs, window=10) \
+            for thrs in thrs_l]
+    precisions, recalls, f1s, alarms = zip(*eval)
+    max_ind = np.argmax(f1s)
+    f1 = f1s[max_ind]
+    precision = precisions[max_ind]
+    recall = recalls[max_ind]
+    thrs = thrs_l[max_ind]
+    alarm = alarms[max_ind]
+    #print("thrs: ", thrs)
+    print("F1 score: ", f1)
+    #print("train precision recall", tr_precision, tr_recall)
+    print("val precision recall", precision, recall)
+
+    #if plot:
+    #try:
+    #plt.clf()
+    #plt.cla()
+    #plt.close()
+    fig = plt.figure(figsize=(30, 8))
+    #fig.add_subplot(211)
+    #plt.plot(np.arange(len(tr_all_score)), tr_all_score, zorder=1)
+    #plt.scatter(np.where(tr_all_true_y == 1)[0], tr_all_true_y[tr_all_true_y== 1],
+    #    marker='x', c='r', zorder=2)
+    #plt.scatter(np.where(tr_alarm==1)[0], tr_alarm[tr_alarm==1] * tr_thrs,
+    #        marker='o', c='r', zorder=3)
+
+    #fig.add_subplot(111)
+    plt.plot(np.arange(len(all_score)), all_score, zorder=1)
+    plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1] * thrs,
+        marker='x', c='b', zorder=2)
+    plt.scatter(np.where(alarm==1)[0], alarm[alarm==1] * thrs,
+            marker='o', c='r', zorder=3)
+    plt.pause(0.001)
+    #plt.ion()
+    plt.show()
+    #plt.gcf().clear()
+    #except:
+    #    pass
+
+
+
+
+
+
 def train(n_epochs, data_loader, kdr, device, val_loader=None,
         model_save_path=None, result_save_path=None, plot=True, window=6,
         train_loader_seq=None):
     # n : how many windows to be grouped? batch_size should be multiple of n
+    print(model_save_path)
     batch_size  = data_loader.batch_size
     optimizer = optim.Adam(kdr.parameters(), lr=0.0005)
     step_size = 10
@@ -91,24 +219,25 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
             all_loss = torch.stack(all_loss).mean().cpu().numpy()
             print("Validation loss", all_loss)
 
-            thrs_l = np.linspace(0, 6, num=50)
+            #thrs_l = np.linspace(0, 6, num=50)
             #window = 6
 
-            tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window=5) \
+            thrs_l = np.linspace(tr_all_score.min(), tr_all_score.max(), num=50)
+            tr_eval = [f1_score(tr_all_score, tr_all_true_y, thrs, window=10) \
                     for thrs in thrs_l]
             tr_precisions, tr_recalls, tr_f1s, tr_alarms = zip(*tr_eval)
-            eval = [f1_score(all_score, all_true_y, thrs, window=5) \
-                    for thrs in thrs_l]
-            precisions, recalls, f1s, alarms = zip(*eval)
             max_ind = np.argmax(tr_f1s)
-
             tr_f1 = tr_f1s[max_ind]
+            tr_thrs = thrs_l[max_ind]
             tr_precision = tr_precisions[max_ind]
             tr_recall = tr_recalls[max_ind]
             tr_alarm = tr_alarms[max_ind]
 
+            thrs_l = np.linspace(all_score.min(), all_score.max(), num=50)
+            eval = [f1_score(all_score, all_true_y, thrs, window=10) \
+                    for thrs in thrs_l]
+            precisions, recalls, f1s, alarms = zip(*eval)
             max_ind = np.argmax(f1s)
-
             f1 = f1s[max_ind]
             precision = precisions[max_ind]
             recall = recalls[max_ind]
@@ -120,7 +249,9 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
             print("val precision recall", precision, recall)
 
             if f1 > best_val_score and model_save_path is not None:
+                best_val_score = f1
                 torch.save(kdr.state_dict(), model_save_path)
+                print("#########################save")
                 best_model_loss = all_loss
                 best_model_score = all_score
                 best_model_f1 = f1
@@ -146,7 +277,7 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
                     plt.plot(np.arange(len(tr_all_score)), tr_all_score, zorder=1)
                     plt.scatter(np.where(tr_all_true_y == 1)[0], tr_all_true_y[tr_all_true_y== 1],
                         marker='x', c='r', zorder=2)
-                    plt.scatter(np.where(tr_alarm==1)[0], tr_alarm[tr_alarm==1] * thrs,
+                    plt.scatter(np.where(tr_alarm==1)[0], tr_alarm[tr_alarm==1] *tr_thrs,
                             #np.ones_like(np.where(tr_all_score > thrs)[0]) * thrs,
                             marker='o', c='r', zorder=3)
 
@@ -166,12 +297,14 @@ def train(n_epochs, data_loader, kdr, device, val_loader=None,
                     #plt.gcf().clear()
                 except:
                     pass
+    kdr.load_state_dict(torch.load(model_save_path))
 
-def main(conf):
+
+def main(conf, training=True):
     # Data Load
     train_loader, val_loader, train_loader_seq, window, input_dim = \
         data_load(filename='../aruba/processed.csv', #'../N1Lounge8F_06/n1lounge8f_06_nonempty.csv',
-            validation_split=conf['validation_split'],
+            train_split=conf['validation_split'],
             window=conf['window'], jump=conf['jump'], n=conf['group_size'],
             L=500,
             batch_size=conf['batch_size']) # jump * n / 2
@@ -192,11 +325,14 @@ def main(conf):
     #data = pandas.read_csv("../../N1Lounge8F/n1lounge8f_06_1.csv")
     #cols = data.columns
     n_epochs = conf['n_epochs']
-    train(n_epochs, train_loader, kdr, device, val_loader,
+    if training:
+      train(n_epochs, train_loader, kdr, device, val_loader,
         model_save_path=conf['model_save_path'],
         result_save_path=conf['result_save_path'],
         plot=True,#conf.get('plot', True),
         window=int(window/conf['jump']), train_loader_seq=train_loader_seq)
+
+    test(val_loader, train_loader_seq, kdr, conf['model_save_path'], device)
     #x_datetime = data['timestamp'].values[30:10037]
     #x_datetime = [np.datetime64(datetime.fromtimestamp(x), 's') for x in x_datetime]
 
@@ -211,6 +347,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config, "r") as f:
         conf = yaml.load(f)
+    if not os.path.exists('models'):
+        os.makedirs('models')
+    conf['model_save_path'] = 'models/best_param_conf{}.model'.format(conf['idx'])
+    if not os.path.exists('results'):
+        os.makedirs('results')
+    conf['result_save_path'] = 'results/conf{}.csv'.format(conf['idx'])
+    main(conf, training=False)
     ## Data
     #parser.add_argument('--validation_split', type=float, default=0.5)
     #parser.add_argument('--window', type=int, default=60,
@@ -244,10 +387,3 @@ if __name__ == "__main__":
     #parser.add_argument('--n_epochs', type=int, default=1000,
     #        help='epochs')
     #conf = vars(parser.parse_args())
-    if not os.path.exists('models'):
-        os.makedirs('models')
-    conf['model_save_path'] = 'models/best_param_conf{}.model'.format(conf['idx'])
-    if not os.path.exists('results'):
-        os.makedirs('results')
-    conf['result_save_path'] = 'results/conf{}.csv'.format(conf['idx'])
-    main(conf)

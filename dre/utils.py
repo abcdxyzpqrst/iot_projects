@@ -40,9 +40,9 @@ class IoTCNNDataset(Dataset):
         self.features, self.labels = csv_load(csv_file)
         if L is not None:
             self.features, self.labels = self.features[:L], self.labels[:L]
-        print(len(self.features))
-        print(self.labels.sum())
-        input()
+        #print(len(self.features))
+        #print(self.labels.sum())
+       # input()
         self.window = window
         self.jump = jump
         self.n = n
@@ -92,7 +92,7 @@ class IoTCNNDataset(Dataset):
 
 
 def data_load(filename='../N1Lounge8F_06/n1lounge8f_06_10sec.csv',
-               validation_split=0.5,
+               train_split=0.5,
                window=6, jump=1, batch_size=100, n=50, L=None):
     print("L", L)
     print("n", n)
@@ -101,7 +101,7 @@ def data_load(filename='../N1Lounge8F_06/n1lounge8f_06_10sec.csv',
     n_data = len(n1lounge)
     indices = np.array(range(n_data))
 
-    split = int(np.floor(validation_split * n_data))
+    split = int(np.floor(train_split * n_data))
     train_indices, val_indices = indices[:split], indices[split:]
 
     train_sampler = SubsetRandomSampler(train_indices)

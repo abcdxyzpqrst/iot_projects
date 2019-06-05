@@ -11,16 +11,16 @@ def f1_score(scores, y, thrs, window=10):
     cnt = 0
     for i, score in enumerate(scores): # tp, fp 계산
         alarm = 0
-        if score < thrs:
+        if score <= thrs:
             detected = False
             alarm = 0
             cnt = 0
         elif detected:
-            cnt += 1
-            if cnt % window == 0:
-                detected = False
+            #cnt += 1
+            #if cnt % window == 0:
+            #    detected = False
             alarm = 0
-            #alarms.append(alarm)
+        #    alarms.append(alarm)
             #continue
         elif score > thrs:
             alarm = 1

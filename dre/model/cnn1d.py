@@ -58,7 +58,6 @@ class CNN(nn.Module):
             L = update_L(L, kernel_size=self.pool_kernel, stride=self.pool_kernel)
         self.feature_extraction = nn.Sequential(m)
 
-        print("Final L", L)
         fc_in = self.n_channels[-1] * L
         self.fc = nn.Linear(fc_in, self.embedding_dim)
 
