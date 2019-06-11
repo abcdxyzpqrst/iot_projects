@@ -1,5 +1,6 @@
 import torch
 import os
+import time
 import csv
 import argparse
 #from model.1dcnn import DCNN
@@ -114,10 +115,15 @@ def test(val_loader, train_loader_seq, kdr, model_save_path, device):
     thrs = thrs_l[max_ind]
     alarm = alarms[max_ind]
     #print("thrs: ", thrs)
+    for i in range(len(all_score)):
+        score = all_score[i]
+        if score > thrs:
+            print ("[{} Minuites after First Data] Changepoint Score: {} <-- Changepoint!!".format(i+1, score))
+        else:
+            print ("[{} Minuites after First Data] Changepoint Score: {}".format(i+1, score))
+        #time.sleep(0.1)
     print("F1 score: ", f1)
-    #print("train precision recall", tr_precision, tr_recall)
     print("val precision recall", precision, recall)
-
     #if plot:
     #try:
     #plt.clf()
@@ -132,14 +138,34 @@ def test(val_loader, train_loader_seq, kdr, model_save_path, device):
     #        marker='o', c='r', zorder=3)
 
     #fig.add_subplot(111)
+    #print ("plotting start!")
+    for i in range(len(np.arange(len(all_score)))):
+        plt.xlabel("Times, $t$")
+        plt.ylabel("Changepoint Score")
+        plt.xlim([0, len(np.arange(len(all_score)))])
+        plt.ylim([-0.004, 0.004])
+        plt.plot(np.arange(len(all_score))[0:i+1], all_score[0:i+1], color='black', zorder=1)
+        plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y == 1] * thrs, marker='x', c='b', zorder=2)
+        changepoint_occur = np.where(alarm==1)[0]
+        length = np.sum(changepoint_occur < i+1)
+        plt.scatter(np.where(alarm==1)[0][0:length], alarm[alarm==1][0:length] * thrs, marker='o', c='r', zorder=3)
+        plt.savefig("animation/animation_{}.png".format(i+1), bbox_inches="tight", transparent=False)
+    
+    """
     plt.plot(np.arange(len(all_score)), all_score, zorder=1)
     plt.scatter(np.where(all_true_y == 1)[0], all_true_y[all_true_y== 1] * thrs,
         marker='x', c='b', zorder=2)
-    plt.scatter(np.where(alarm==1)[0], alarm[alarm==1] * thrs,
-            marker='o', c='r', zorder=3)
+    changepoint_occur = np.where(alarm==1)[0]
+    changepoint_score = alarm[alarm==1] * thrs
+    length = np.sum(changepoint_occur < 60)
+    #print (np.where(alarm==1)[0], alarm[alarm==1] * thrs)
+    plt.scatter(np.where(alarm==1)[0][0:length], alarm[alarm==1][0:length] * thrs,
+        marker='o', c='r', zorder=3)
     plt.pause(0.001)
     #plt.ion()
-    plt.show()
+    #plt.show()
+    plt.savefig("animation.png", bbox_inches="tight", transparent=False)
+    """
     #plt.gcf().clear()
     #except:
     #    pass
