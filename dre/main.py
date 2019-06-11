@@ -121,7 +121,7 @@ def test(val_loader, train_loader_seq, kdr, model_save_path, device):
             print ("[{} Minuites after First Data] Changepoint Score: {} <-- Changepoint!!".format(i+1, score))
         else:
             print ("[{} Minuites after First Data] Changepoint Score: {}".format(i+1, score))
-        #time.sleep(0.1)
+        time.sleep(0.1)
     print("F1 score: ", f1)
     print("val precision recall", precision, recall)
     #if plot:
